@@ -7,6 +7,7 @@ import java.time.LocalDateTime
 data class Trade(
     val symbol: String,
     val id: Long,
+    val orderId: Long,
     val ouid: String? = null,
     val price: BigDecimal,
     val quantity: BigDecimal,

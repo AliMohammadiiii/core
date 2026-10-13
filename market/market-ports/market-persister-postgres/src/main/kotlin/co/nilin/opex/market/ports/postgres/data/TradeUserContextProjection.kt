@@ -8,6 +8,7 @@ data class TradeUserContextProjection(
     val baseAsset: String?,
     val quoteAsset: String?,
     val id: Long,
+    val orderId: Long,
     val price: BigDecimal,
     val quantity: BigDecimal,
     val quoteQuantity: BigDecimal,

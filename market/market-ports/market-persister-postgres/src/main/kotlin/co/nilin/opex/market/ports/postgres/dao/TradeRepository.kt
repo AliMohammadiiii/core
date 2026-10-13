@@ -89,10 +89,15 @@ interface TradeRepository : ReactiveCrudRepository<TradeModel, Long> {
         SELECT
         t.symbol AS symbol,
     
-        NULL AS baseAsset,
-        NULL AS quoteAsset,
+        NULL AS base_asset,
+        NULL AS quote_asset,
     
         t.trade_id AS id,
+        CASE
+            WHEN t.taker_uuid = :uuid
+            THEN to2.order_id
+            ELSE mo.order_id
+        END AS order_id,
     
         CASE
             WHEN t.taker_uuid = :uuid
@@ -109,9 +114,9 @@ interface TradeRepository : ReactiveCrudRepository<TradeModel, Long> {
                 ELSE to2.quote_quantity
             END,
             0
-        ) AS quoteQuantity,
+        ) AS quote_quantity,
     
-        t.create_date AS createDate,
+        t.create_date AS create_date,
     
         COALESCE(
             CASE
@@ -120,7 +125,7 @@ interface TradeRepository : ReactiveCrudRepository<TradeModel, Long> {
                 ELSE FALSE
             END,
             FALSE
-        ) AS isMakerBuyer,
+        ) AS is_maker_buyer,
     
         CASE
             WHEN t.taker_uuid = :uuid
@@ -138,15 +143,15 @@ interface TradeRepository : ReactiveCrudRepository<TradeModel, Long> {
             WHEN t.taker_uuid = :uuid
             THEN t.taker_commission_asset
             ELSE t.maker_commission_asset
-        END AS commissionAsset,
+        END AS commission_asset,
     
         CASE
             WHEN t.taker_uuid = :uuid
             THEN (to2.side = 'BID')
             ELSE (mo.side = 'BID')
-        END AS isBuyer,
+        END AS is_buyer,
     
-        (t.maker_uuid = :uuid) AS isMaker
+        (t.maker_uuid = :uuid) AS is_maker
     
     FROM trades t
     
@@ -763,11 +768,11 @@ interface TradeRepository : ReactiveCrudRepository<TradeModel, Long> {
     @Query(
         """
 select t.symbol,
-       t.id,
+       t.trade_id as id,
        o.order_id,
-       case when :uuid = t.maker_uuid then t.maker_price else t.taker_price end           as price,
+       t.matched_price as price,
        t.matched_quantity as quantity,
-       o.quote_quantity,
+       t.matched_quantity * t.matched_price as quote_quantity,
        case when :uuid = t.maker_uuid then t.maker_commission else t.taker_commission end as commission,
        case
            when :uuid = t.maker_uuid then t.maker_commission_asset

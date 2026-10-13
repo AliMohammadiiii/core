@@ -101,6 +101,7 @@ class UserQueryHandlerImpl(
                 Trade(
                     it.symbol,
                     it.id,
+                    it.orderId,
                     it.ouid,
                     it.price,
                     it.quantity,

@@ -15,7 +15,7 @@ if [[ "${1:-package}" == "test" ]]; then
   "$TASK_MAVEN_BIN" "${TASK_MAVEN_ARGS[@]}" -B \
     -pl matching-engine/matching-engine-app,accountant/accountant-app,matching-gateway/matching-gateway-app,market/market-ports/market-persister-postgres \
     -am -Pno-vault -Dskip.unit.tests=false -Dsurefire.failIfNoSpecifiedTests=false \
-    -Dtest=CommandPublicationProgressTest,OrderAdmissionProgressTest,OrderIntentStoreTest,OrderSafetyTest,SimpleOrderBookUnitTest,OrderRefundSafetyTest,OrderManagerImplTest,TradeManagerImplTest,FeeCalculatorImplTest,TradePersisterTest,OrderPersisterTest,MarketQueryHandlerTest,UserQueryHandlerTest,OrderIntentHttpTest \
+    -Dtest=CommandPublicationProgressTest,OrderAdmissionProgressTest,OrderIntentStoreTest,OrderSafetyTest,SimpleOrderBookUnitTest,OrderRefundSafetyTest,OrderManagerImplTest,TradeManagerImplTest,FeeCalculatorImplTest,TradePersisterTest,OrderPersisterTest,MarketQueryHandlerTest,UserQueryHandlerTest,UserTradeHistoryPostgresTest,OrderIntentHttpTest \
     '-DargLine=-Xmx384m -XX:ActiveProcessorCount=2' test
 else
   "$TASK_MAVEN_BIN" "${TASK_MAVEN_ARGS[@]}" -B -Pno-vault \

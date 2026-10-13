@@ -17,7 +17,7 @@ Output paths are `api/api-app/target/api-app.jar`, `matching-gateway/matching-ga
 
 The new schemas are additive in each port's existing schema.sql initializer. Gateway adds intent/outbox/cursor tables; accountant adds admission and inbox tables plus nullable client ID and post-only columns/index. Existing order or ledger rows are not rewritten. Before using a fresh source runtime, retain the actual source commit and jar/image hashes, preserve the original demo snapshot, use separate database/Redis/Kafka state, and verify the full submit/reserve/match/settle/cancel/restart loop. Source/test success alone is not proof of a deployed jar.
 
-Review round 1 adds the command-publication, admission-progress, and concurrent cursor regressions to `scripts/build-order-foundation.sh test`. With the isolated PostgreSQL URL set, the selected suites contain 78 tests; omitting it skips the database-backed evidence. Run only one Maven reactor at a time. Round 1 was verified with a 512 MiB Maven heap, a 256 MiB test heap, and two active CPUs.
+Review round 1 adds the command-publication, admission-progress, and concurrent cursor regressions to `scripts/build-order-foundation.sh test`. At review round 1, with the isolated PostgreSQL URL set, the selected suites contained 78 tests; omitting it skips the database-backed evidence. Run only one Maven reactor at a time. Round 1 was verified with a 512 MiB Maven heap, a 256 MiB test heap, and two active CPUs.
 
 Package only the three services changed by this review round:
 
@@ -39,3 +39,15 @@ docker exec -i opex-order-test-postgres psql -v ON_ERROR_STOP=1 -U opex_test -d 
 ```
 
 Use a dedicated empty test database: the admission and intent fixtures delete their test rows before each case. Set OPEX_TEST_POSTGRES to that database's R2DBC URL, then run the test script.
+
+Review round 2 adds `UserTradeHistoryPostgresTest` to the complete affected selection (80 tests). Its real PostgreSQL fixture creates a unique schema, initializes the Market schema, and drops only that test schema afterward; no existing Market rows are changed. The two cases cover owner isolation, maker/taker and BUY/SELL attribution, distinct matching/database IDs, multiple partial fills, differing order limits and execution prices, executed notionals, commissions/assets, and unchanged timestamps. The shared legacy Trade DTO consumer also receives its actual matching order ID. API already declares and decodes orderId; this round changes only the Market source and needs no API jar or database migration.
+
+Run the focused Market regression selection with the isolated OPEX_TEST_POSTGRES URL set:
+
+```sh
+mvn -B -pl market/market-ports/market-persister-postgres -am \
+  -Dskip.unit.tests=false -Dsurefire.failIfNoSpecifiedTests=false \
+  -Dtest=UserTradeHistoryPostgresTest,MarketQueryHandlerTest,TradePersisterTest,OrderPersisterTest,UserQueryHandlerTest test
+```
+
+Package only Market with `mvn -B -Pno-vault -pl market/market-app -am -Dskip.unit.tests=true -Dmaven.test.skip=true package`. The parent task verifies the authenticated public HTTP response and SDK after deploying that jar; repository/serialized DTO tests alone are not deployed wire proof.
