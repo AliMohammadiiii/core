@@ -72,17 +72,18 @@ class UserTradeHistoryPostgresTest {
             maker_price,taker_price,maker_ouid,taker_ouid,maker_uuid,taker_uuid,maker_commission,
             maker_commission_asset,taker_commission,taker_commission_asset,trade_date,create_date)
             VALUES(:rowId,:tradeId,'BTC_USDT','BTC','USDT',:price,:quantity,:makerPrice,:takerPrice,
-            :makerOuid,:takerOuid,:maker,:taker,:makerFee,:makerFeeAsset,:takerFee,:takerFeeAsset,:date,:date)""")
+            :makerOuid,:takerOuid,:maker,:taker,:makerFee,:makerFeeAsset,:takerFee,:takerFeeAsset,:date,:created)""")
             .bind("rowId", rowId).bind("tradeId", tradeId).bind("price", BigDecimal(price))
             .bind("quantity", BigDecimal(quantity)).bind("makerPrice", BigDecimal(makerPrice))
             .bind("takerPrice", BigDecimal(takerPrice)).bind("makerOuid", makerOuid).bind("takerOuid", takerOuid)
             .bind("maker", maker).bind("taker", taker).bind("makerFee", BigDecimal(makerFee))
             .bind("makerFeeAsset", makerFeeAsset).bind("takerFee", BigDecimal(takerFee))
-            .bind("takerFeeAsset", takerFeeAsset).bind("date", time).fetch().rowsUpdated().awaitSingle()
+            .bind("takerFeeAsset", takerFeeAsset).bind("date", time).bind("created", time.plusMinutes(5))
+            .fetch().rowsUpdated().awaitSingle()
     }
 
     private suspend fun history(owner: String) = handler.getTradeHistory(owner, "BTC_USDT", null, null, null, 100, 0)!!
-    private fun decimal(expected: String, actual: BigDecimal) = assertEquals(0, BigDecimal(expected).compareTo(actual))
+    private fun decimal(expected: String, actual: BigDecimal) = assertEquals(0, BigDecimal(expected).compareTo(actual), "Expected $expected but was $actual")
     private fun json(trade: Trade): JsonNode = mapper.valueToTree(trade)
 
     @Test
@@ -101,15 +102,34 @@ class UserTradeHistoryPostgresTest {
         val buyer = history("buyer")
         val seller = history("seller")
         val legacyBuyer = handler.allTrades("buyer", TradeRequest("BTC_USDT", null, null, null, 100))!!
+        val legacySeller = handler.allTrades("seller", TradeRequest("BTC_USDT", null, null, null, 100))!!
         assertEquals(2, buyer.size)
         assertEquals(2, seller.size)
+        assertEquals(2, legacyBuyer.size)
+        assertEquals(2, legacySeller.size)
         assertTrue(history("stranger").isEmpty())
+        assertTrue(handler.allTrades("stranger", TradeRequest("BTC_USDT", null, null, null, 100))!!.isEmpty())
         assertAll(
             { assertEquals(listOf(32L, 31L), buyer.map { it.id }) },
             { assertEquals(listOf(32L, 31L), seller.map { it.id }) },
             { assertEquals(listOf(202L, 202L), buyer.map { json(it)["orderId"]?.asLong() }) },
             { assertEquals(listOf(303L, 101L), seller.map { json(it)["orderId"]?.asLong() }) },
             { assertEquals(listOf(202L, 202L), legacyBuyer.map { json(it)["orderId"]?.asLong() }) },
+            { assertEquals(listOf(303L, 101L), legacySeller.map { json(it)["orderId"]?.asLong() }) },
+            { assertEquals(listOf(32L, 31L), legacyBuyer.map { it.id }) },
+            { assertEquals(listOf(32L, 31L), legacySeller.map { it.id }) },
+            { decimal("62400", legacyBuyer[0].price) }, { decimal("62500", legacyBuyer[1].price) },
+            { decimal("62400", legacySeller[0].price) }, { decimal("62500", legacySeller[1].price) },
+            { decimal("0.025", legacyBuyer[0].quantity) }, { decimal("0.075", legacyBuyer[1].quantity) },
+            { decimal("0.025", legacySeller[0].quantity) }, { decimal("0.075", legacySeller[1].quantity) },
+            { decimal("1560", legacyBuyer[0].quoteQuantity) }, { decimal("4687.5", legacyBuyer[1].quoteQuantity) },
+            { decimal("1560", legacySeller[0].quoteQuantity) }, { decimal("4687.5", legacySeller[1].quoteQuantity) },
+            { decimal("0.000025", legacyBuyer[0].commission) }, { decimal("4.6875", legacySeller[1].commission) },
+            { assertEquals("BTC", legacyBuyer[0].commissionAsset) }, { assertEquals("USDT", legacySeller[1].commissionAsset) },
+            { assertTrue(legacyBuyer.all { it.isBuyer && !it.isMaker && !it.isMakerBuyer }) },
+            { assertTrue(legacySeller.all { !it.isBuyer && it.isMaker && !it.isMakerBuyer }) },
+            { assertEquals(listOf(date.plusSeconds(2), date), legacyBuyer.map { it.time }) },
+            { assertEquals(listOf(date.plusSeconds(2), date), legacySeller.map { it.time }) },
             { decimal("62400", buyer[0].price) }, { decimal("62500", buyer[1].price) },
             { decimal("0.025", buyer[0].quantity) }, { decimal("0.075", buyer[1].quantity) },
             { decimal("1560", buyer[0].quoteQuantity) }, { decimal("4687.5", buyer[1].quoteQuantity) },
@@ -129,7 +149,20 @@ class UserTradeHistoryPostgresTest {
             "0.00004", "BTC", "2.496", "USDT", date)
         val buyer = history("buyer").single()
         val seller = history("seller").single()
+        val legacyBuyer = handler.allTrades("buyer", TradeRequest("BTC_USDT", null, null, null, 100))!!.single()
+        val legacySeller = handler.allTrades("seller", TradeRequest("BTC_USDT", null, null, null, 100))!!.single()
         assertAll(
+            { assertEquals(34L, legacyBuyer.id) }, { assertEquals(34L, legacySeller.id) },
+            { assertEquals(606L, json(legacyBuyer)["orderId"]?.asLong()) },
+            { assertEquals(707L, json(legacySeller)["orderId"]?.asLong()) },
+            { decimal("62400", legacyBuyer.price) }, { decimal("62400", legacySeller.price) },
+            { decimal("0.04", legacyBuyer.quantity) }, { decimal("0.04", legacySeller.quantity) },
+            { decimal("2496", legacyBuyer.quoteQuantity) }, { decimal("2496", legacySeller.quoteQuantity) },
+            { decimal("0.00004", legacyBuyer.commission) }, { decimal("2.496", legacySeller.commission) },
+            { assertEquals("BTC", legacyBuyer.commissionAsset) }, { assertEquals("USDT", legacySeller.commissionAsset) },
+            { assertTrue(legacyBuyer.isMaker && legacyBuyer.isBuyer && legacyBuyer.isMakerBuyer) },
+            { assertTrue(!legacySeller.isMaker && !legacySeller.isBuyer && legacySeller.isMakerBuyer) },
+            { assertEquals(date, legacyBuyer.time) }, { assertEquals(date, legacySeller.time) },
             { assertEquals(34L, buyer.id) }, { assertEquals(34L, seller.id) },
             { assertEquals(606L, json(buyer)["orderId"]?.asLong()) },
             { assertEquals(707L, json(seller)["orderId"]?.asLong()) },

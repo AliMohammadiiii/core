@@ -51,3 +51,5 @@ mvn -B -pl market/market-ports/market-persister-postgres -am \
 ```
 
 Package only Market with `mvn -B -Pno-vault -pl market/market-app -am -Dskip.unit.tests=true -Dmaven.test.skip=true package`. The parent task verifies the authenticated public HTTP response and SDK after deploying that jar; repository/serialized DTO tests alone are not deployed wire proof.
+
+Review round 3 completes the adjacent legacy `allTrades` execution projection. The same two real PostgreSQL cases now assert maker/taker prices, individual partial-fill notionals, native trade/order IDs, commissions/assets, owner isolation, direction flags, and execution timestamps on both owner-history paths. Fixtures persist each fill five minutes after its `trade_date` to prove that legacy time comes from execution. The focused Market selection remains 19 tests and uses the round-2 reproduction/package commands. No API change or migration is required; runtime and financial state are managed by the parent task.
