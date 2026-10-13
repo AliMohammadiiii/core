@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS accountant_event_inbox (
     processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE order_admission ADD COLUMN IF NOT EXISTS reconciliation_required BOOLEAN NOT NULL DEFAULT FALSE;
+
 CREATE TABLE IF NOT EXISTS fi_actions
 (
     id                   SERIAL PRIMARY KEY,

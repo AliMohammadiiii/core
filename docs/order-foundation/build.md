@@ -16,3 +16,26 @@ Recovered utility jar SHA256 values:
 Output paths are `api/api-app/target/api-app.jar`, `matching-gateway/matching-gateway-app/target/matching-gateway-app.jar`, `matching-engine/matching-engine-app/target/matching-engine-app.jar`, `accountant/accountant-app/target/accountant-app.jar`, `market/market-app/target/market-app.jar`, and `eventlog/eventlog-app/target/eventlog-app.jar`. Deploy all readers of the changed matching protocol together; an old eventlog RejectReason enum cannot decode new rejection names.
 
 The new schemas are additive in each port's existing schema.sql initializer. Gateway adds intent/outbox/cursor tables; accountant adds admission and inbox tables plus nullable client ID and post-only columns/index. Existing order or ledger rows are not rewritten. Before using a fresh source runtime, retain the actual source commit and jar/image hashes, preserve the original demo snapshot, use separate database/Redis/Kafka state, and verify the full submit/reserve/match/settle/cancel/restart loop. Source/test success alone is not proof of a deployed jar.
+
+Review round 1 adds the command-publication, admission-progress, and concurrent cursor regressions to `scripts/build-order-foundation.sh test`. With the isolated PostgreSQL URL set, the selected suites contain 78 tests; omitting it skips the database-backed evidence. Run only one Maven reactor at a time. Round 1 was verified with a 512 MiB Maven heap, a 256 MiB test heap, and two active CPUs.
+
+Package only the three services changed by this review round:
+
+```sh
+mvn -B -Pno-vault \
+  -pl matching-engine/matching-engine-app,accountant/accountant-app,matching-gateway/matching-gateway-app \
+  -am -Dskip.unit.tests=true -Dmaven.test.skip=true package
+```
+
+The accountant schema initializer applies the additive migration `ALTER TABLE order_admission ADD COLUMN IF NOT EXISTS reconciliation_required BOOLEAN NOT NULL DEFAULT FALSE;`. Apply it before the revised admission scheduler is enabled. The gateway cursor fix has no schema migration. Preserve the existing command offsets and Redis snapshots when restarting for replay; do not create replacement orders, reservation references, or wallet credits as a recovery step. The source regressions do not prove runtime recovery until the existing command backlog and durable intent state are checked in the deployed system.
+
+The database-backed tests expect both service schemas to exist in the isolated test database. For the owned PostgreSQL container used in this run, initialize them before running the test script:
+
+```sh
+docker exec -i opex-order-test-postgres psql -v ON_ERROR_STOP=1 -U opex_test -d opex_test \
+  < accountant/accountant-ports/accountant-persister-postgres/src/main/resources/schema.sql
+docker exec -i opex-order-test-postgres psql -v ON_ERROR_STOP=1 -U opex_test -d opex_test \
+  < matching-gateway/matching-gateway-port/matching-gateway-persister-postgres/src/main/resources/schema.sql
+```
+
+Use a dedicated empty test database: the admission and intent fixtures delete their test rows before each case. Set OPEX_TEST_POSTGRES to that database's R2DBC URL, then run the test script.

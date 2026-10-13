@@ -68,6 +68,10 @@ class OrderIntentStore(private val db: DatabaseClient, private val tx: Transacti
 
     suspend fun outcome(owner: String, ouid: String, key: String, payload: String, status: String,
                         orderId: Long?, remaining: Long?, reason: String?) = tx.executeAndAwait {
+        // Hold a per-owner transaction lock before BIGSERIAL allocation, through commit.
+        // Forward readers can never observe a later same-owner cursor while an earlier event is uncommitted.
+        db.sql("SELECT pg_advisory_xact_lock(hashtextextended(:scope,0))")
+            .bind("scope", "opex:intent-events:$owner").map { _, _ -> true }.one().awaitSingle()
         val found = find(owner, null, ouid) ?: return@executeAndAwait
         val inserted = db.sql("INSERT INTO order_intent_event(event_key,owner,ouid,payload) VALUES(:key,:owner,:ouid,:payload) ON CONFLICT(event_key) DO NOTHING")
             .bind("key", key).bind("owner", owner).bind("ouid", ouid).bind("payload", payload)

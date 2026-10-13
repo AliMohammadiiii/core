@@ -13,8 +13,10 @@ export MAVEN_OPTS="${MAVEN_OPTS:--Xmx768m -XX:ActiveProcessorCount=2}"
 
 if [[ "${1:-package}" == "test" ]]; then
   "$TASK_MAVEN_BIN" "${TASK_MAVEN_ARGS[@]}" -B \
-    -pl accountant/accountant-core,matching-engine/matching-engine-core,matching-gateway/matching-gateway-port/matching-gateway-persister-postgres,market/market-ports/market-persister-postgres \
-    -am -Dskip.unit.tests=false '-DargLine=-Xmx384m -XX:ActiveProcessorCount=2' test
+    -pl matching-engine/matching-engine-app,accountant/accountant-app,matching-gateway/matching-gateway-app,market/market-ports/market-persister-postgres \
+    -am -Pno-vault -Dskip.unit.tests=false -Dsurefire.failIfNoSpecifiedTests=false \
+    -Dtest=CommandPublicationProgressTest,OrderAdmissionProgressTest,OrderIntentStoreTest,OrderSafetyTest,SimpleOrderBookUnitTest,OrderRefundSafetyTest,OrderManagerImplTest,TradeManagerImplTest,FeeCalculatorImplTest,TradePersisterTest,OrderPersisterTest,MarketQueryHandlerTest,UserQueryHandlerTest,OrderIntentHttpTest \
+    '-DargLine=-Xmx384m -XX:ActiveProcessorCount=2' test
 else
   "$TASK_MAVEN_BIN" "${TASK_MAVEN_ARGS[@]}" -B -Pno-vault \
     -pl api/api-app,matching-gateway/matching-gateway-app,matching-engine/matching-engine-app,accountant/accountant-app,market/market-app,eventlog/eventlog-app \

@@ -13,13 +13,8 @@ import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.serialization.StringSerializer
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.kafka.core.DefaultKafkaProducerFactory
 import org.springframework.kafka.core.KafkaTemplate
-import org.springframework.kafka.support.serializer.JsonSerializer
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
@@ -35,14 +30,8 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 class OrderAdmissionService(private val db: DatabaseClient, manager: ReactiveTransactionManager,
     private val orders: OrderManager, private val mapper: ObjectMapper,
     @Qualifier("accountantEventKafkaTemplate") private val eventProducer: KafkaTemplate<String?, CoreEvent>,
-    @Value("\${spring.kafka.bootstrap-servers}") bootstrap: String) {
+    @Qualifier("orderAdmissionKafkaTemplate") private val producer: KafkaTemplate<String, ReservedOrder>) {
     private val tx = TransactionalOperator.create(manager)
-    private val producer = KafkaTemplate<String, ReservedOrder>(DefaultKafkaProducerFactory(mapOf(
-        ProducerConfig.BOOTSTRAP_SERVERS_CONFIG to bootstrap,
-        ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG to StringSerializer::class.java,
-        ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG to JsonSerializer::class.java,
-        ProducerConfig.ACKS_CONFIG to "all",
-        JsonSerializer.TYPE_MAPPINGS to "order_request_submit:co.nilin.opex.matching.engine.core.inout.OrderSubmitRequestEvent")))
 
     suspend fun accept(event: OrderSubmitRequestEvent) {
         if (event.reservationConfirmed) return
@@ -67,7 +56,8 @@ class OrderAdmissionService(private val db: DatabaseClient, manager: ReactiveTra
                 val item = db.sql("""SELECT a.ouid,a.payload,f.status,
                     (SELECT e.body FROM fi_action_error e WHERE e.fa_id=f.id ORDER BY e.date DESC LIMIT 1) AS rejection_body
                     FROM order_admission a JOIN fi_actions f ON f.uuid=a.reserve_uuid
-                    WHERE a.published_at IS NULL AND f.status IN ('PROCESSED','ERROR')
+                    WHERE a.published_at IS NULL AND (f.status='PROCESSED' OR
+                        (f.status='ERROR' AND NOT a.reconciliation_required))
                     ORDER BY a.created_at FOR UPDATE OF a SKIP LOCKED LIMIT 1""")
                     .map { row, _ -> listOf(row.get("ouid", String::class.java)!!, row.get("payload", String::class.java)!!,
                         row.get("status", String::class.java)!!, row.get("rejection_body", String::class.java)) }
@@ -76,8 +66,13 @@ class OrderAdmissionService(private val db: DatabaseClient, manager: ReactiveTra
                 val failed = item[2] == "ERROR"
                 if (failed) {
                     val body = runCatching { mapper.readTree(item[3] ?: "") }.getOrNull()
-                    if (body?.get("code")?.asInt() != 6018 || body?.get("error")?.asText() != "NotEnoughBalance")
-                        return@executeAndAwait false
+                    if (body?.get("code")?.asInt() != 6018 || body?.get("error")?.asText() != "NotEnoughBalance") {
+                        // Keep the outcome unknown, but stop selecting it ahead of unrelated ready admissions.
+                        // A subsequently reconciled PROCESSED transfer is eligible regardless of this flag.
+                        db.sql("UPDATE order_admission SET reconciliation_required=true WHERE ouid=:ouid")
+                            .bind("ouid", item[0]!!).fetch().rowsUpdated().awaitSingle()
+                        return@executeAndAwait true
+                    }
                 }
                 withTimeout(15000) {
                     suspendCancellableCoroutine<Unit> { cont ->

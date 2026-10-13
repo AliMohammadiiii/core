@@ -12,6 +12,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.r2dbc.connection.R2dbcTransactionManager
 import org.springframework.transaction.reactive.TransactionalOperator
+import org.springframework.transaction.reactive.executeAndAwait
 import java.math.BigDecimal
 import java.util.UUID
 
@@ -90,5 +91,47 @@ class OrderIntentStoreTest {
         assertEquals("PARTIALLY_FILLED", receipt.status)
         assertEquals(2, store().events("owner", 0).size)
         assertTrue(store().events("attacker", 0).isEmpty())
+    }
+
+    @Test
+    fun forwardCursorCannotSkipEarlierCommitAcrossPairsForOneOwner() = runBlocking {
+        val first = store().accept(candidate("pair-one").copy(symbol = "BTC_USDT"))
+        val second = store().accept(candidate("pair-two").copy(symbol = "USDT_IRT"))
+        val locked = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val holder = async(Dispatchers.IO) {
+            tx.executeAndAwait {
+                db.sql("SELECT ouid FROM order_intent WHERE ouid=:id FOR UPDATE").bind("id", first.ouid)
+                    .map { row, _ -> row.get("ouid", String::class.java)!! }.one().awaitSingle()
+                locked.complete(Unit)
+                release.await()
+            }
+        }
+        withTimeout(5000) { locked.await() }
+        suspend fun allocatedCursor() = db.sql("SELECT CASE WHEN is_called THEN last_value ELSE 0 END AS n FROM order_intent_event_cursor_seq")
+            .map { row, _ -> row.get("n", java.lang.Long::class.java)!!.toLong() }.one().awaitSingle()
+        val before = allocatedCursor()
+        val earlyTransaction = async(Dispatchers.IO) {
+            store().outcome("owner", first.ouid, "commit-first", "{}", "OPEN", 1, 1000, null)
+        }
+        var laterTransaction: Deferred<*>? = null
+        try {
+            withTimeout(5000) { while (allocatedCursor() <= before) delay(10) }
+            val later = async(Dispatchers.IO) {
+                store().outcome("owner", second.ouid, "commit-later", "{}", "OPEN", 2, 1000, null)
+            }
+            laterTransaction = later
+            withTimeoutOrNull(1000) { later.await() }
+            val visible = store().events("owner", 0)
+            val lastSeen = visible.lastOrNull()?.get("cursor") as Long? ?: 0L
+            release.complete(Unit)
+            holder.await(); earlyTransaction.await(); later.await()
+            val nextPage = store().events("owner", lastSeen)
+            val observed = (visible + nextPage).map { it["ouid"] }.toSet()
+            assertEquals(setOf(first.ouid, second.ouid), observed)
+        } finally {
+            release.complete(Unit)
+            holder.await(); earlyTransaction.await(); laterTransaction?.await()
+        }
     }
 }
