@@ -5,6 +5,7 @@ import co.nilin.opex.matching.gateway.app.service.OrderIntentService
 import co.nilin.opex.matching.gateway.ports.postgres.dto.*
 import co.nilin.opex.matching.gateway.ports.postgres.service.OrderIntentStore
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import java.security.Principal
@@ -12,6 +13,10 @@ import java.security.Principal
 @RestController
 @RequestMapping("/v2/order")
 class OrderIntentController(private val service: OrderIntentService, private val store: OrderIntentStore) {
+    @ExceptionHandler(ResponseStatusException::class)
+    fun expectedFailure(error: ResponseStatusException): ResponseEntity<Map<String, String>> =
+        ResponseEntity.status(error.status).body(mapOf("error" to (error.reason ?: "Order request failed")))
+
     @PostMapping
     suspend fun submit(principal: Principal, @RequestBody request: OrderIntentRequest): Map<String, Any?> =
         receipt(try { service.submit(principal.name, request) } catch (e: OrderIntentConflict) {

@@ -6,10 +6,16 @@ import co.nilin.opex.common.security.tokenValue
 import org.springframework.security.core.annotation.CurrentSecurityContext
 import org.springframework.security.core.context.SecurityContext
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.server.ResponseStatusException
+import org.springframework.http.ResponseEntity
 
 @RestController
 @RequestMapping("/opex/v2/order")
 class OrderIntentController(private val proxy: OrderIntentProxy) {
+    @ExceptionHandler(ResponseStatusException::class)
+    fun expectedFailure(error: ResponseStatusException): ResponseEntity<Map<String, String>> =
+        ResponseEntity.status(error.statusCode).body(mapOf("error" to (error.reason ?: "Order request failed")))
+
     @PostMapping
     suspend fun submit(@RequestBody request: OrderIntentRequest, @CurrentSecurityContext context: SecurityContext) =
         proxy.submit(request, context.jwtAuthentication().tokenValue())
