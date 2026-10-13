@@ -74,6 +74,7 @@ internal class TradeManagerImplTest {
     )
 
     init {
+        coEvery { orderPersister.load(any()) } returns null
         coEvery { tempEventPersister.loadTempEvents(any()) } returns emptyList()
         coEvery { orderPersister.save(any()) } returnsArgument (0)
         coEvery { financeActionLoader.findLast(any(), any()) } returns null

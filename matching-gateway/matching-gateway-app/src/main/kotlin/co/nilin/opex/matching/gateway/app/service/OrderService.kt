@@ -81,7 +81,8 @@ class OrderService(
             createOrderRequest.direction,
             createOrderRequest.matchConstraint,
             createOrderRequest.orderType,
-            createOrderRequest.userLevel
+            createOrderRequest.userLevel,
+            requiresReservation = true
         )
         return orderRequestEventSubmitter.submit(orderSubmitRequest)
     }

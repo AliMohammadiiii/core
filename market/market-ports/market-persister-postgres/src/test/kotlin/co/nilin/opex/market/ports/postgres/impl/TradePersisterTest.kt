@@ -1,6 +1,8 @@
 package co.nilin.opex.market.ports.postgres.impl
 
 import co.nilin.opex.market.ports.postgres.dao.TradeRepository
+import co.nilin.opex.market.core.event.RichTrade
+import co.nilin.opex.market.core.inout.OrderDirection
 import co.nilin.opex.market.ports.postgres.impl.sample.VALID
 import co.nilin.opex.market.ports.postgres.model.TradeModel
 import co.nilin.opex.market.ports.postgres.util.RedisCacheHelper
@@ -30,17 +32,21 @@ class TradePersisterTest {
 
     @Test
     fun givenDuplicateTrade_whenSaveRichTrade_thenIgnoredAsIdempotent(): Unit = runBlocking {
-        every { tradeRepository.save(any()) } returnsMany listOf(
-            Mono.error(DuplicateKeyException("Duplicate key")),
-            Mono.just(VALID.TRADE_MODEL)
-        )
+        val duplicate = RichTrade(1, "ETH_USDT", VALID.TRADE_MODEL.takerOuid, VALID.RICH_TRADE.takerUuid,
+            2, OrderDirection.BID, BigDecimal("100000"), BigDecimal("0.001"), BigDecimal("100"),
+            BigDecimal.ZERO, BigDecimal("0.0010"), "ETH", VALID.TRADE_MODEL.makerOuid,
+            VALID.RICH_TRADE.makerUuid, 1, OrderDirection.ASK, BigDecimal("100000"), BigDecimal("0.001"),
+            BigDecimal("100"), BigDecimal.ZERO, BigDecimal("0.0010"), "USDT",
+            BigDecimal("100000"), BigDecimal("0.001"), VALID.TRADE_MODEL.tradeDate)
+        every { tradeRepository.save(any()) } returns Mono.error(DuplicateKeyException("Duplicate key"))
         every { tradeRepository.findBySymbolAndTradeId(any(), any()) } returns Mono.just(VALID.TRADE_MODEL)
-        assertThatNoException().isThrownBy { runBlocking { tradePersister.save(VALID.RICH_TRADE) } }
+        assertThatNoException().isThrownBy { runBlocking { tradePersister.save(duplicate) } }
     }
 
     @Test
     fun givenTradeIdCollision_whenSaveRichTrade_thenThrow() {
-        every { tradeRepository.save(any()) } returns Mono.error(DuplicateKeyException("duplicate trade"))
+        every { tradeRepository.save(any()) } returnsMany listOf(
+            Mono.error(DuplicateKeyException("duplicate trade")), Mono.just(VALID.TRADE_MODEL))
         every { tradeRepository.findBySymbolAndTradeId(any(), any()) } returns Mono.just(
             TradeModel(
                 VALID.TRADE_MODEL.id,

@@ -1,6 +1,7 @@
 package co.nilin.opex.accountant.app.listener
 
 import co.nilin.opex.accountant.core.api.OrderManager
+import co.nilin.opex.accountant.app.service.OrderAdmissionService
 import co.nilin.opex.accountant.ports.kafka.listener.inout.OrderRequestEvent
 import co.nilin.opex.accountant.ports.kafka.listener.inout.OrderSubmitRequestEvent
 import co.nilin.opex.accountant.ports.kafka.listener.spi.OrderSubmitRequestListener
@@ -8,7 +9,7 @@ import co.nilin.opex.matching.engine.core.eventh.events.SubmitOrderEvent
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 
-class OrderListener(private val orderManager: OrderManager) : OrderSubmitRequestListener {
+class OrderListener(private val orderManager: OrderManager, private val admission: OrderAdmissionService) : OrderSubmitRequestListener {
 
     private val logger = LoggerFactory.getLogger(OrderListener::class.java)
 
@@ -19,6 +20,11 @@ class OrderListener(private val orderManager: OrderManager) : OrderSubmitRequest
     override fun onEvent(event: OrderRequestEvent, partition: Int, offset: Long, timestamp: Long) {
         runBlocking {
             if (event is OrderSubmitRequestEvent) {
+                if (event.reservationConfirmed) return@runBlocking
+                if (event.requiresReservation) {
+                    admission.accept(event)
+                    return@runBlocking
+                }
                 logger.info("Order submit event received ${event.ouid}")
                 orderManager.handleRequestOrder(
                     SubmitOrderEvent(

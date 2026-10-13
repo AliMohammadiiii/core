@@ -27,7 +27,9 @@ data class Order(
     val firstTransferAmount: BigDecimal,
     var remainedTransferAmount: BigDecimal,
     var status: Int,
-    val id: Long? = null
+    val id: Long? = null,
+    val clientOrderId: String? = null,
+    val postOnly: Boolean = false
 ) {
 
     fun isAsk() = direction == OrderDirection.ASK

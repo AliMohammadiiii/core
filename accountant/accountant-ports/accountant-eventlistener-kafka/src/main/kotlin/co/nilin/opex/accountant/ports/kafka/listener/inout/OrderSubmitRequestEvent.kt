@@ -16,4 +16,8 @@ class OrderSubmitRequestEvent(
     val orderType: OrderType,
     val userLevel: String,
     val orderId: Long? = null,
+    val clientOrderId: String? = null,
+    val postOnly: Boolean = false,
+    val requiresReservation: Boolean = false,
+    val reservationConfirmed: Boolean = false,
 ) : OrderRequestEvent(ouid, uuid, pair)

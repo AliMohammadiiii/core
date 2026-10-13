@@ -35,12 +35,14 @@ class OrderPersisterImpl(private val orderRepository: OrderRepository) : OrderPe
             model.firstTransferAmount,
             model.remainedTransferAmount,
             model.status,
-            model.id
+            model.id,
+            model.clientOrderId,
+            model.postOnly
         )
     }
 
     override suspend fun save(order: Order): Order {
-        orderRepository.save(
+        val saved = orderRepository.save(
             OrderModel(
                 order.id,
                 order.ouid,
@@ -66,9 +68,11 @@ class OrderPersisterImpl(private val orderRepository: OrderRepository) : OrderPe
                 order.status,
                 "",
                 "",
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                order.clientOrderId,
+                order.postOnly
             )
         ).awaitFirstOrNull()
-        return order
+        return order.copy(id = saved!!.id)
     }
 }

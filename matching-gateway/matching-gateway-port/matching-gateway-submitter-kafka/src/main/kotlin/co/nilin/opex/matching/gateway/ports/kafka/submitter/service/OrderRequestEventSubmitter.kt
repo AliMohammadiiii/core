@@ -7,17 +7,17 @@ import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Component
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 @Component
 class OrderRequestEventSubmitter(val kafkaTemplate: KafkaTemplate<String, OrderRequestEvent>) {
 
     private val logger = LoggerFactory.getLogger(OrderRequestEventSubmitter::class.java)
 
-    suspend fun submit(order: OrderRequestEvent): OrderSubmitResult = suspendCoroutine { cont ->
+    suspend fun submit(order: OrderRequestEvent): OrderSubmitResult = suspendCancellableCoroutine { cont ->
         logger.info("Submitting OrderRequestEvent: ouid=${order.ouid}")
 
-        val sendFuture = kafkaTemplate.send("orders_${order.pair.leftSideName}_${order.pair.rightSideName}", order)
+        val sendFuture = kafkaTemplate.send("orders_${order.pair.leftSideName}_${order.pair.rightSideName}", order.pair.toString(), order)
         sendFuture.addCallback({
             cont.resume(OrderSubmitResult(it?.recordMetadata?.offset()))
         }, {

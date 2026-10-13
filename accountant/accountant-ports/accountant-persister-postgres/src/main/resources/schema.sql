@@ -27,6 +27,18 @@ CREATE TABLE IF NOT EXISTS orders
     create_date              TIMESTAMP   NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS order_admission (
+    ouid VARCHAR(72) PRIMARY KEY,
+    payload TEXT NOT NULL,
+    reserve_uuid VARCHAR(72) NOT NULL UNIQUE,
+    published_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS accountant_event_inbox (
+    event_key VARCHAR(200) PRIMARY KEY,
+    processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS fi_actions
 (
     id                   SERIAL PRIMARY KEY,
@@ -228,3 +240,7 @@ CREATE TABLE IF NOT EXISTS user_deposit_volume
 );
 
 COMMIT;
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS client_order_id VARCHAR(80);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS post_only BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE UNIQUE INDEX IF NOT EXISTS orders_owner_client_id ON orders(uuid,client_order_id) WHERE client_order_id IS NOT NULL;

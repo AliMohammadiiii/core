@@ -25,5 +25,6 @@ data class RichOrder(
     val executedQuantity: BigDecimal,
     val accumulativeQuoteQty: BigDecimal,
     val status: Int = 0,
-    val createDate: LocalDateTime?
+    val createDate: LocalDateTime?,
+    val clientOrderId: String? = null
 ) : RichOrderEvent

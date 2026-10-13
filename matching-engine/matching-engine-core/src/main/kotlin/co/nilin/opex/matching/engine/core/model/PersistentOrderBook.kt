@@ -6,6 +6,10 @@ class PersistentOrderBook {
     var lastOrder: PersistentOrder? = null
     var orders: List<PersistentOrder>? = emptyList()
     var tradeCounter: Long = 0
+    var orderCounter: Long = 0
+    var processedOuids: List<String> = emptyList()
+    var pendingCancellations: Map<String, String> = emptyMap()
+    var pendingEvents: MutableList<String> = mutableListOf()
 
     constructor() {
     }

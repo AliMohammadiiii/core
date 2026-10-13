@@ -121,6 +121,8 @@ class SecurityConfig(
                     .pathMatchers("/opex/v1/admin/**").hasAuthority("ROLE_admin")
                     .pathMatchers("/opex/v1/deposit/**").hasAuthority("PERM_deposit:write")
                     .pathMatchers(HttpMethod.POST, "/opex/v1/order").hasAuthority("PERM_order:write")
+                    .pathMatchers(HttpMethod.POST, "/opex/v2/order").hasAuthority("PERM_order:write")
+                    .pathMatchers(HttpMethod.DELETE, "/opex/v2/order").hasAuthority("PERM_order:write")
                     .pathMatchers(HttpMethod.PUT, "/opex/v1/order").hasAuthority("PERM_order:write")
                     .pathMatchers(HttpMethod.POST, "/opex/v1/withdraw").hasAuthority("PERM_withdraw:write")
                     .pathMatchers(HttpMethod.PUT, "/opex/v1/withdraw").hasAuthority("PERM_withdraw:write")

@@ -10,6 +10,7 @@ import co.nilin.opex.matching.engine.ports.kafka.listener.consumer.EventKafkaLis
 import co.nilin.opex.matching.engine.ports.kafka.listener.consumer.OrderKafkaListener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -27,36 +28,29 @@ class AppConfig(
     fun orderBookPersister(): OrderBookPersister {
         return object : OrderBookPersister {
             override suspend fun storeLastState(orderBook: PersistentOrderBook) {
+                error("Durable matching snapshot storage is required")
             }
 
             override suspend fun loadLastState(symbol: String): PersistentOrderBook? {
-                return null
+                error("Durable matching snapshot storage is required")
             }
         }
     }
 
     @Autowired
-    fun configureOrderBooks(orderBookPersister: OrderBookPersister) {
-        symbols.forEach { symbol ->
-            CoroutineScope(AppSchedulers.generalExecutor).launch {
-                val lastOrderBook = orderBookPersister.loadLastState(symbol)
-                //todo: load db orders from last order in order book and put in order book
-                //todo: add missing orders to lastOrderBook or create one
-                if (lastOrderBook != null) {
-                    withContext(coroutineContext) {
-                        OrderBooks.reloadOrderBook(lastOrderBook)
-                    }
-                } else {
-                    OrderBooks.createOrderBook(symbol)
-                }
-
+    fun configureOrderBooks(orderBookPersister: OrderBookPersister, handler: ExchangeEventHandler) {
+        runBlocking {
+            symbols.forEach { symbol ->
+                val saved = orderBookPersister.loadLastState(symbol)
+                if (saved != null) OrderBooks.reloadOrderBook(saved) else OrderBooks.createOrderBook(symbol)
+                handler.recover(symbol)
             }
         }
     }
 
     @Bean
-    fun orderListener(): OrderListener {
-        return OrderListener()
+    fun orderListener(handler: ExchangeEventHandler): OrderListener {
+        return OrderListener(handler)
     }
 
     @Autowired

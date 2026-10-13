@@ -14,5 +14,8 @@ data class OrderCreateCommand(
     val quantity: Long,
     val direction: OrderDirection,
     val matchConstraint: MatchConstraint,
-    val orderType: OrderType
+    val orderType: OrderType,
+    val postOnly: Boolean = false,
+    val clientOrderId: String? = null,
+    val reservePriceBound: Boolean = false
 )

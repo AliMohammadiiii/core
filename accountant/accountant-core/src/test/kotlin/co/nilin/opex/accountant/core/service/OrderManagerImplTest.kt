@@ -24,6 +24,7 @@ import org.mockito.kotlin.any
 import java.math.BigDecimal
 
 internal class OrderManagerImplTest {
+    private val testOrder = Valid.order.copy()
 
     private val financialActionPersister = mockk<FinancialActionPersister>()
     private val financialActionLoader = mockk<FinancialActionLoader>()
@@ -46,6 +47,7 @@ internal class OrderManagerImplTest {
     )
 
     init {
+        coEvery { orderPersister.load(any()) } returns null
         coEvery { tempEventPersister.loadTempEvents(any()) } returns emptyList()
         coEvery { orderPersister.save(any()) } returnsArgument (0)
         coEvery { richOrderPublisher.publish(any()) } returnsArgument (0)
@@ -186,12 +188,12 @@ internal class OrderManagerImplTest {
             OrderDirection.BID
         )
 
-        coEvery { orderPersister.load(any()) } returns Valid.order
+        coEvery { orderPersister.load(any()) } returns testOrder
 
         val fa = orderManager.handleNewOrder(orderEvent)
 
         assertThat(fa.size).isEqualTo(0)
-        assertThat(Valid.order.matchingEngineId).isEqualTo(55)
+        assertThat(testOrder.matchingEngineId).isEqualTo(55)
         coVerify(exactly = 1) { richOrderPublisher.publish(any()) }
     }
 
@@ -265,15 +267,17 @@ internal class OrderManagerImplTest {
             RequestedOperation.PLACE_ORDER,
             RejectReason.ORDER_NOT_FOUND,
         )
-        coEvery { orderPersister.load(any()) } returns Valid.order
+        coEvery { orderPersister.load(any()) } returns testOrder
 
+        val reserveBefore = testOrder.remainedTransferAmount
         val fa = orderManager.handleRejectOrder(orderEvent)[0]
 
-        assertThat(fa.amount).isEqualTo(Valid.order.remainedTransferAmount)
+        assertThat(fa.amount).isEqualTo(reserveBefore)
+        assertThat(testOrder.remainedTransferAmount).isEqualTo(BigDecimal.ZERO)
         assertThat(fa.symbol).isEqualTo(orderEvent.pair.rightSideName)
         assertThat(fa.category).isEqualTo(FinancialActionCategory.ORDER_CANCEL)
 
-        assertThat(Valid.order.status).isEqualTo(OrderStatus.REJECTED.code)
+        assertThat(testOrder.status).isEqualTo(OrderStatus.REJECTED.code)
 
         coVerify(exactly = 1) { richOrderPublisher.publish(any()) }
         coVerify(exactly = 1) { orderPersister.save(any()) }
@@ -283,7 +287,7 @@ internal class OrderManagerImplTest {
     fun givenCancelOrderReceived_whenLocalOrderNull_saveTempEvent(): Unit = runBlocking {
         val orderEvent = CancelOrderEvent(
             "order_ouid",
-            "user_id",
+            "user_1",
             88,
             Pair("BTC", "USDT"),
             100000,
@@ -304,7 +308,7 @@ internal class OrderManagerImplTest {
     fun givenCancelOrderReceived_whenLocalFound_publishRichOrderUpdate(): Unit = runBlocking {
         val orderEvent = CancelOrderEvent(
             "order_ouid",
-            "user_id",
+            "user_1",
             88,
             Pair("BTC", "USDT"),
             100000,
@@ -312,14 +316,16 @@ internal class OrderManagerImplTest {
             500,
             OrderDirection.BID
         )
-        coEvery { orderPersister.load(any()) } returns Valid.order
+        coEvery { orderPersister.load(any()) } returns testOrder
 
+        val reserveBefore = testOrder.remainedTransferAmount
         val fa = orderManager.handleCancelOrder(orderEvent)[0]
 
-        assertThat(fa.amount).isEqualTo(Valid.order.remainedTransferAmount)
+        assertThat(fa.amount).isEqualTo(reserveBefore)
+        assertThat(testOrder.remainedTransferAmount).isEqualTo(BigDecimal.ZERO)
         assertThat(fa.symbol).isEqualTo(orderEvent.pair.rightSideName)
         assertThat(fa.category).isEqualTo(FinancialActionCategory.ORDER_CANCEL)
-        assertThat(Valid.order.status).isEqualTo(OrderStatus.CANCELED.code)
+        assertThat(testOrder.status).isEqualTo(OrderStatus.CANCELED.code)
 
         coVerify(exactly = 1) { richOrderPublisher.publish(any()) }
         coVerify(exactly = 1) { orderPersister.save(any()) }

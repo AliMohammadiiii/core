@@ -37,6 +37,7 @@ class OrderKafkaConfig {
         return mapOf(
             ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG to bootstrapServers,
             ConsumerConfig.GROUP_ID_CONFIG to groupId,
+            ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG to false,
             ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG to StringDeserializer::class.java,
             ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG to JsonDeserializer::class.java,
             JsonDeserializer.TRUSTED_PACKAGES to "co.nilin.opex.*",
@@ -54,19 +55,20 @@ class OrderKafkaConfig {
         return DefaultKafkaConsumerFactory(consumerConfigs)
     }
 
-    @Autowired
+    @Bean("matchingOrderListenerContainer")
     fun configureListener(
         orderKafkaListener: OrderKafkaListener,
         @Qualifier("orderKafkaTemplate") template: KafkaTemplate<String?, OrderRequestEvent>,
         @Qualifier("orderConsumerFactory") consumerFactory: ConsumerFactory<String, OrderRequestEvent>
-    ) {
+    ): KafkaMessageListenerContainer<String, OrderRequestEvent> {
         val topics = symbols.map { s -> "orders_$s" }.toTypedArray()
         val containerProps = ContainerProperties(*topics)
         containerProps.messageListener = orderKafkaListener
+        containerProps.ackMode = ContainerProperties.AckMode.RECORD
         val container = KafkaMessageListenerContainer(consumerFactory, containerProps)
         container.setBeanName("OrderKafkaListenerContainer")
         container.commonErrorHandler = createConsumerErrorHandler(template, "orders.DLT")
-        container.start()
+        return container
     }
 
     @Autowired

@@ -13,10 +13,10 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Component
 import java.time.LocalDateTime
+import java.math.BigDecimal
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.*
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.abs
 
 @Component
@@ -112,37 +112,7 @@ class TradePersisterImpl(
             return
         }
 
-        // Real ID collision (e.g. Redis counter reset): persist under a new synthetic ID and continue
-        logger.error(
-            "Trade ID collision for symbol=${incomingTrade.symbol}, tradeId=${incomingTrade.tradeId}. " +
-                    "Saving colliding trade under a new synthetic ID."
-        )
-        //todo cast the tradeId to BigInteger
-        val newId = generateUniqueId()
-        logger.info("The old tradeId ${incomingTrade.tradeId} - The new tradeId: $newId")
-        val reassigned = TradeModel(
-            null,
-            newId,
-            incomingTrade.symbol,
-            incomingTrade.baseAsset,
-            incomingTrade.quoteAsset,
-            incomingTrade.matchedPrice,
-            incomingTrade.matchedQuantity,
-            incomingTrade.takerPrice,
-            incomingTrade.makerPrice,
-            incomingTrade.takerCommission,
-            incomingTrade.makerCommission,
-            incomingTrade.takerCommissionAsset,
-            incomingTrade.makerCommissionAsset,
-            incomingTrade.tradeDate,
-            incomingTrade.makerOuid,
-            incomingTrade.takerOuid,
-            incomingTrade.makerUuid,
-            incomingTrade.takerUuid,
-            incomingTrade.createDate
-        )
-        val saved = tradeRepository.save(reassigned).awaitFirstOrNull()
-        updateCache(originalTrade, saved)
+        throw DuplicateKeyException("Conflicting execution identity: symbol=${incomingTrade.symbol}, tradeId=${incomingTrade.tradeId}")
     }
 
     private fun isSameTradePayload(existing: TradeModel, incoming: TradeModel): Boolean {
@@ -152,11 +122,14 @@ class TradePersisterImpl(
                 existing.matchedPrice.compareTo(incoming.matchedPrice) == 0 &&
                 existing.matchedQuantity.compareTo(incoming.matchedQuantity) == 0 &&
                 tradeDateDeltaSeconds <= 5 &&
-                existing.makerCommission == incoming.makerCommission &&
-                existing.takerCommission == incoming.takerCommission &&
+                sameAmount(existing.makerCommission, incoming.makerCommission) &&
+                sameAmount(existing.takerCommission, incoming.takerCommission) &&
                 existing.makerCommissionAsset == incoming.makerCommissionAsset &&
                 existing.takerCommissionAsset == incoming.takerCommissionAsset
     }
+
+    private fun sameAmount(a: BigDecimal?, b: BigDecimal?): Boolean =
+        if (a == null || b == null) a == b else a.compareTo(b) == 0
 
     private fun isDuplicateTradeViolation(exception: Throwable): Boolean {
         val errorText = buildString {
@@ -168,7 +141,4 @@ class TradePersisterImpl(
                 errorText.contains("duplicate key value", ignoreCase = true)
     }
 
-    private fun generateUniqueId(): Long {
-        return AtomicLong(System.currentTimeMillis() * 1000).incrementAndGet()
-    }
 }

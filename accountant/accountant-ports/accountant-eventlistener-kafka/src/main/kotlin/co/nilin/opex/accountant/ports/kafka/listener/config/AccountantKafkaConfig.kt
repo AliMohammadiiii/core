@@ -34,6 +34,7 @@ class AccountantKafkaConfig {
         return mapOf(
             ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG to bootstrapServers,
             ConsumerConfig.GROUP_ID_CONFIG to groupId,
+            ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG to false,
             ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG to StringDeserializer::class.java,
             ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG to JsonDeserializer::class.java,
             JsonDeserializer.TRUSTED_PACKAGES to "co.nilin.opex.*",
@@ -90,6 +91,7 @@ class AccountantKafkaConfig {
     ): ConcurrentMessageListenerContainer<String, CoreEvent> {
         val containerProps = ContainerProperties(Pattern.compile("events_.*"))
         containerProps.messageListener = eventListener
+        containerProps.ackMode = ContainerProperties.AckMode.RECORD
         val container = ConcurrentMessageListenerContainer(consumerFactory, containerProps)
         container.setBeanName("EventKafkaListenerContainer")
         container.commonErrorHandler = createConsumerErrorHandler(template, "events.DLT")
@@ -105,6 +107,7 @@ class AccountantKafkaConfig {
     ): ConcurrentMessageListenerContainer<String, CoreEvent> {
         val containerProps = ContainerProperties(Pattern.compile("orders_.*"))
         containerProps.messageListener = orderListener
+        containerProps.ackMode = ContainerProperties.AckMode.RECORD
         val container = ConcurrentMessageListenerContainer(consumerFactory, containerProps)
         container.setBeanName("OrderKafkaListenerContainer")
         container.commonErrorHandler = createConsumerErrorHandler(template, "orders.DLT")
@@ -120,6 +123,7 @@ class AccountantKafkaConfig {
     ): ConcurrentMessageListenerContainer<String, CoreEvent> {
         val containerProps = ContainerProperties(Pattern.compile("tempevents"))
         containerProps.messageListener = eventListener
+        containerProps.ackMode = ContainerProperties.AckMode.RECORD
         val container = ConcurrentMessageListenerContainer(consumerFactory, containerProps)
         container.setBeanName("TempEventKafkaListenerContainer")
         container.commonErrorHandler = createConsumerErrorHandler(template, "tempevents.DLT")
@@ -134,6 +138,7 @@ class AccountantKafkaConfig {
     ): ConcurrentMessageListenerContainer<String, FinancialActionResponseEvent> {
         val containerProps = ContainerProperties(Pattern.compile("fiAction_response"))
         containerProps.messageListener = eventListener
+        containerProps.ackMode = ContainerProperties.AckMode.RECORD
         val container = ConcurrentMessageListenerContainer(consumerFactory, containerProps)
         container.setBeanName("FAResponseKafkaListenerContainer")
         return container

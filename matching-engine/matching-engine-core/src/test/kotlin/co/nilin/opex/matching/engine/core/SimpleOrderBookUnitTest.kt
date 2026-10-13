@@ -26,7 +26,7 @@ class SimpleOrderBookUnitTest {
         val order = orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -48,7 +48,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -63,7 +63,7 @@ class SimpleOrderBookUnitTest {
             orderBook.handleNewOrderCommand(
                 OrderCreateCommand(
                     UUID.randomUUID().toString(),
-                    uuid,
+                    UUID.randomUUID().toString(),
                     pair,
                     1,
                     1,
@@ -89,7 +89,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 2,
                 1,
@@ -104,7 +104,7 @@ class SimpleOrderBookUnitTest {
             orderBook.handleNewOrderCommand(
                 OrderCreateCommand(
                     UUID.randomUUID().toString(),
-                    uuid,
+                    UUID.randomUUID().toString(),
                     pair,
                     1,
                     1,
@@ -130,7 +130,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -145,7 +145,7 @@ class SimpleOrderBookUnitTest {
             orderBook.handleNewOrderCommand(
                 OrderCreateCommand(
                     UUID.randomUUID().toString(),
-                    uuid,
+                    UUID.randomUUID().toString(),
                     pair,
                     2,
                     1,
@@ -171,7 +171,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -184,7 +184,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -207,7 +207,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 2,
                 1,
@@ -219,7 +219,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -233,7 +233,7 @@ class SimpleOrderBookUnitTest {
             orderBook.handleNewOrderCommand(
                 OrderCreateCommand(
                     UUID.randomUUID().toString(),
-                    uuid,
+                    UUID.randomUUID().toString(),
                     pair,
                     3,
                     1,
@@ -256,7 +256,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 2,
                 1,
@@ -268,7 +268,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -280,7 +280,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 3,
                 1,
@@ -294,7 +294,7 @@ class SimpleOrderBookUnitTest {
             orderBook.handleNewOrderCommand(
                 OrderCreateCommand(
                     UUID.randomUUID().toString(),
-                    uuid,
+                    UUID.randomUUID().toString(),
                     pair,
                     1,
                     3,
@@ -320,7 +320,7 @@ class SimpleOrderBookUnitTest {
         val firstOrder = orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 firstOrderId,
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 2,
                 1,
@@ -332,7 +332,7 @@ class SimpleOrderBookUnitTest {
         val lastOrder = orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 secondOrderId,
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -342,7 +342,7 @@ class SimpleOrderBookUnitTest {
             )
         )
         //when
-        orderBook.handleCancelCommand(OrderCancelCommand(firstOrderId, uuid, firstOrder!!.id()!!, pair))
+        orderBook.handleCancelCommand(OrderCancelCommand(firstOrderId, (firstOrder as SimpleOrder).uuid, firstOrder!!.id()!!, pair))
         //then
         Assertions.assertEquals(orderBook.bestBidOrder, lastOrder)
         Assertions.assertEquals(orderBook.bidOrders.entriesList().size, 1)
@@ -358,7 +358,7 @@ class SimpleOrderBookUnitTest {
         val firstOrder = orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 firstOrderId,
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 2,
                 1,
@@ -370,7 +370,7 @@ class SimpleOrderBookUnitTest {
         val secondOrder = orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 secondOrderId,
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 2,
                 3,
@@ -382,7 +382,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -392,7 +392,7 @@ class SimpleOrderBookUnitTest {
             )
         )
         //when
-        orderBook.handleCancelCommand(OrderCancelCommand(firstOrderId, uuid, firstOrder!!.id()!!, pair))
+        orderBook.handleCancelCommand(OrderCancelCommand(firstOrderId, (firstOrder as SimpleOrder).uuid, firstOrder!!.id()!!, pair))
         //then
         Assertions.assertEquals(orderBook.bestBidOrder, secondOrder)
         Assertions.assertEquals(orderBook.bidOrders.entriesList().size, 2)
@@ -408,7 +408,7 @@ class SimpleOrderBookUnitTest {
         val firstOrder = orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 firstOrderId,
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 2,
                 1,
@@ -420,7 +420,7 @@ class SimpleOrderBookUnitTest {
         val secondOrder = orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 secondOrderId,
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 2,
                 3,
@@ -432,7 +432,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -442,7 +442,7 @@ class SimpleOrderBookUnitTest {
             )
         )
         //when
-        orderBook.handleCancelCommand(OrderCancelCommand(secondOrderId, uuid, secondOrder!!.id()!!, pair))
+        orderBook.handleCancelCommand(OrderCancelCommand(secondOrderId, (secondOrder as SimpleOrder).uuid, secondOrder!!.id()!!, pair))
         //then
         Assertions.assertEquals(orderBook.bestBidOrder, firstOrder)
         Assertions.assertEquals(orderBook.bidOrders.entriesList().size, 2)
@@ -456,7 +456,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 2,
                 1,
@@ -468,7 +468,7 @@ class SimpleOrderBookUnitTest {
         val secondOrder = orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 2,
                 3,
@@ -480,7 +480,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -493,7 +493,7 @@ class SimpleOrderBookUnitTest {
         val order = orderBook.handleEditCommand(
             OrderEditCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                (secondOrder as SimpleOrder).uuid,
                 secondOrder!!.id()!!,
                 pair,
                 3,
@@ -513,7 +513,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 2,
                 1,
@@ -525,7 +525,7 @@ class SimpleOrderBookUnitTest {
         val secondBid = orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -537,7 +537,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 3,
                 1,
@@ -550,7 +550,7 @@ class SimpleOrderBookUnitTest {
         val order: SimpleOrder = orderBook.handleEditCommand(
             OrderEditCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                (secondBid as SimpleOrder).uuid,
                 secondBid!!.id()!!,
                 pair,
                 3,
@@ -573,7 +573,7 @@ class SimpleOrderBookUnitTest {
         val order = orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -597,7 +597,7 @@ class SimpleOrderBookUnitTest {
         val order = orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -619,7 +619,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 2,
                 1,
@@ -631,7 +631,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -643,7 +643,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 3,
                 1,
@@ -658,7 +658,7 @@ class SimpleOrderBookUnitTest {
             orderBook.handleNewOrderCommand(
                 OrderCreateCommand(
                     UUID.randomUUID().toString(),
-                    uuid,
+                    UUID.randomUUID().toString(),
                     pair,
                     0,
                     3,
@@ -682,7 +682,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 2,
                 1,
@@ -694,7 +694,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 1,
                 1,
@@ -706,7 +706,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 pair,
                 3,
                 1,
@@ -722,7 +722,7 @@ class SimpleOrderBookUnitTest {
             orderBook.handleNewOrderCommand(
                 OrderCreateCommand(
                     UUID.randomUUID().toString(),
-                    uuid,
+                    UUID.randomUUID().toString(),
                     pair,
                     3,
                     3,
@@ -746,7 +746,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 ETH_BTC_PAIR,
                 5000000,
                 10000,
@@ -762,7 +762,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 ETH_BTC_PAIR,
                 4900000,
                 20000,
@@ -780,7 +780,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 ETH_BTC_PAIR,
                 4800000,
                 10000,
@@ -798,7 +798,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 ETH_BTC_PAIR,
                 4850000,
                 20000,
@@ -816,7 +816,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 ETH_BTC_PAIR,
                 4850100,
                 10000,
@@ -834,7 +834,7 @@ class SimpleOrderBookUnitTest {
         orderBook.handleNewOrderCommand(
             OrderCreateCommand(
                 UUID.randomUUID().toString(),
-                uuid,
+                UUID.randomUUID().toString(),
                 ETH_BTC_PAIR,
                 4849900,
                 10000,

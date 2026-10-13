@@ -35,5 +35,7 @@ data class OrderModel(
     @Column("status") val status: Int,
     val agent: String,
     val ip: String,
-    @Column("create_date") val createDate: LocalDateTime
+    @Column("create_date") val createDate: LocalDateTime,
+    @Column("client_order_id") val clientOrderId: String? = null,
+    @Column("post_only") val postOnly: Boolean = false
 )

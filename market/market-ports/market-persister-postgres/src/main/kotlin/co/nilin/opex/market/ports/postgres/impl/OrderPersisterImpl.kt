@@ -38,7 +38,7 @@ class OrderPersisterImpl(
             null,
             order.ouid,
             order.uuid,
-            null,
+            order.clientOrderId,
             order.pair,
             order.orderId,
             order.makerFee,

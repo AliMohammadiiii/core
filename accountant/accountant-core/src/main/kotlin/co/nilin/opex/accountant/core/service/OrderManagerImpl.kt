@@ -9,10 +9,12 @@ import co.nilin.opex.accountant.core.model.*
 import co.nilin.opex.accountant.core.spi.*
 import co.nilin.opex.matching.engine.core.eventh.events.*
 import co.nilin.opex.matching.engine.core.inout.RequestedOperation
+import co.nilin.opex.matching.engine.core.inout.RejectReason
 import co.nilin.opex.matching.engine.core.model.OrderDirection
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import java.util.UUID
 
 open class OrderManagerImpl(
     private val pairConfigLoader: PairConfigLoader,
@@ -27,6 +29,7 @@ open class OrderManagerImpl(
 
     @Transactional
     override suspend fun handleRequestOrder(submitOrderEvent: SubmitOrderEvent): List<FinancialAction> {
+        if (orderPersister.load(submitOrderEvent.ouid) != null) return emptyList()
         //pair + dir -> symbol
         //user level?
         //pair config.makerFee and takerFee
@@ -83,7 +86,9 @@ open class OrderManagerImpl(
                 BigDecimal(submitOrderEvent.quantity - submitOrderEvent.remainedQuantity).multiply(pairConfig.leftSideFraction),
                 amount,
                 amount,
-                OrderStatus.REQUESTED.code
+                OrderStatus.REQUESTED.code,
+                clientOrderId = submitOrderEvent.clientOrderId,
+                postOnly = submitOrderEvent.postOnly
             )
         )
         val financialAction = FinancialAction(
@@ -97,10 +102,11 @@ open class OrderManagerImpl(
             submitOrderEvent.uuid,
             WalletType.EXCHANGE,
             LocalDateTime.now(),
-            FinancialActionCategory.ORDER_CREATE
+            FinancialActionCategory.ORDER_CREATE,
+            uuid = stableReference("reserve", submitOrderEvent.ouid)
         )
 
-        return financialActionPersister.persist(listOf(financialAction))
+        return if (financialAction.amount > BigDecimal.ZERO) financialActionPersister.persist(listOf(financialAction)) else emptyList()
         /*publishFinancialAction(financialAction)
         return fa*/
     }
@@ -110,6 +116,7 @@ open class OrderManagerImpl(
         //update order add id to other fields
         val order = orderPersister.load(createOrderEvent.ouid)
         if (order != null) {
+            require(order.uuid == createOrderEvent.uuid) { "Admission owner mismatch" }
             order.matchingEngineId = createOrderEvent.orderId
             orderPersister.save(order)
             //new order accepted by engine
@@ -141,7 +148,17 @@ open class OrderManagerImpl(
         } else {
             rejectOrderEvent.pair.rightSideName
         }
-        //check uuid
+        require(order.uuid == rejectOrderEvent.uuid) { "Reject owner mismatch" }
+        if (order.status in listOf(OrderStatus.CANCELED.code, OrderStatus.REJECTED.code, OrderStatus.FILLED.code)) return emptyList()
+        if (rejectOrderEvent.reason == RejectReason.RESERVATION_FAILED) {
+            // A definitive wallet refusal created no reserve. Never refund someone else's held funds.
+            order.remainedTransferAmount = BigDecimal.ZERO
+            order.status = OrderStatus.REJECTED.code
+            orderPersister.save(order)
+            richOrderPublisher.publish(RichOrderUpdate(order.ouid, order.origPrice, order.origQuantity,
+                order.origQuantity, OrderStatus.REJECTED))
+            return emptyList()
+        }
         //lookup for parent fa
         val parentFinancialAction = financeActionLoader.findLast(rejectOrderEvent.uuid, rejectOrderEvent.ouid)
         //create fa for transfer remaining transfered uuid symbol exchange wallet to uuid main exchange wallet
@@ -156,21 +173,23 @@ open class OrderManagerImpl(
             rejectOrderEvent.uuid,
             WalletType.MAIN,
             LocalDateTime.now(),
-            FinancialActionCategory.ORDER_CANCEL
+            FinancialActionCategory.ORDER_CANCEL,
+            uuid = stableReference("release", order.ouid)
         )
         //update order status
+        order.remainedTransferAmount = BigDecimal.ZERO
         order.status = OrderStatus.REJECTED.code
         orderPersister.save(order)
         richOrderPublisher.publish(
             RichOrderUpdate(
                 order.ouid,
-                order.price.toBigDecimal(),
-                order.quantity.toBigDecimal(),
-                BigDecimal.ZERO,
+                order.origPrice,
+                order.origQuantity,
+                order.origQuantity.subtract(order.filledOrigQuantity),
                 OrderStatus.REJECTED
             )
         )
-        return financialActionPersister.persist(listOf(financialAction))
+        return if (financialAction.amount > BigDecimal.ZERO) financialActionPersister.persist(listOf(financialAction)) else emptyList()
         /*publishFinancialAction(financialAction)
         return fa*/
     }
@@ -189,7 +208,8 @@ open class OrderManagerImpl(
         } else {
             cancelOrderEvent.pair.rightSideName
         }
-        //check uuid
+        require(order.uuid == cancelOrderEvent.uuid) { "Cancel owner mismatch" }
+        if (order.status in listOf(OrderStatus.CANCELED.code, OrderStatus.REJECTED.code, OrderStatus.FILLED.code)) return emptyList()
         //lookup for parent fa
         val parentFinancialAction = financeActionLoader.findLast(cancelOrderEvent.uuid, cancelOrderEvent.ouid)
         //create fa for transfer remaining transfered uuid symbol exchange wallet to uuid main exchange wallet
@@ -204,9 +224,11 @@ open class OrderManagerImpl(
             cancelOrderEvent.uuid,
             WalletType.MAIN,
             LocalDateTime.now(),
-            FinancialActionCategory.ORDER_CANCEL
+            FinancialActionCategory.ORDER_CANCEL,
+            uuid = stableReference("release", order.ouid)
         )
         //update order status
+        order.remainedTransferAmount = BigDecimal.ZERO
         order.status = OrderStatus.CANCELED.code
         orderPersister.save(order)
         richOrderPublisher.publish(
@@ -219,7 +241,7 @@ open class OrderManagerImpl(
             )
         )
 
-        return financialActionPersister.persist(listOf(financialAction))
+        return if (financialAction.amount > BigDecimal.ZERO) financialActionPersister.persist(listOf(financialAction)) else emptyList()
         /*publishFinancialAction(financialAction)
         return fa*/
     }
@@ -228,7 +250,7 @@ open class OrderManagerImpl(
     private suspend fun publishRichOrder(order: Order, remainedQuantity: BigDecimal, status: OrderStatus? = null) {
         richOrderPublisher.publish(
             RichOrder(
-                order.id,
+                order.matchingEngineId,
                 order.pair,
                 order.ouid,
                 order.uuid,
@@ -246,7 +268,7 @@ open class OrderManagerImpl(
                 order.quantity.toBigDecimal().subtract(remainedQuantity)
                     .multiply(order.leftSideFraction),
                 order.origPrice.multiply(
-                    order.quantity.toBigDecimal().subtract(remainedQuantity)
+                    order.quantity.toBigDecimal().subtract(remainedQuantity).multiply(order.leftSideFraction)
                 ),
                 status?.code ?: if (remainedQuantity.compareTo(BigDecimal.ZERO) == 0) {
                     OrderStatus.FILLED.code
@@ -255,7 +277,8 @@ open class OrderManagerImpl(
                 } else {
                     OrderStatus.PARTIALLY_FILLED.code
                 },
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                order.clientOrderId
             )
         )
     }
@@ -269,6 +292,8 @@ open class OrderManagerImpl(
             financialActionPersister.updateStatus(financialAction.uuid, FinancialActionStatus.SENT)
         }
     }
+
+    private fun stableReference(operation: String, ouid: String) = UUID.nameUUIDFromBytes("opex:$operation:$ouid".toByteArray()).toString()
 
     private suspend fun getFee(uuid: String): BigDecimal {
 

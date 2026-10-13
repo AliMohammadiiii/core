@@ -1,6 +1,7 @@
 package co.nilin.opex.accountant.app.config
 
 import co.nilin.opex.accountant.app.listener.*
+import co.nilin.opex.accountant.app.service.*
 import co.nilin.opex.accountant.core.api.FeeCalculator
 import co.nilin.opex.accountant.core.api.FinancialActionJobManager
 import co.nilin.opex.accountant.core.api.OrderManager
@@ -93,8 +94,8 @@ class AppConfig(
     }
 
     @Bean
-    fun orderListener(orderManager: OrderManager): OrderListener {
-        return OrderListener(orderManager)
+    fun orderListener(orderManager: OrderManager, admission: OrderAdmissionService): OrderListener {
+        return OrderListener(orderManager, admission)
     }
 
     @Bean
@@ -103,16 +104,15 @@ class AppConfig(
     }
 
     @Bean
-    fun accountantEventListener(orderManager: OrderManager): AccountantEventListener {
-        return AccountantEventListener(orderManager)
+    fun accountantEventListener(processor: AccountantEventProcessor): AccountantEventListener {
+        return AccountantEventListener(processor)
     }
 
     @Bean
     fun accountantTempEventListener(
-        orderManager: OrderManager,
-        tradeManager: TradeManager
+        processor: AccountantEventProcessor
     ): AccountantTempEventListener {
-        return AccountantTempEventListener(orderManager, tradeManager)
+        return AccountantTempEventListener(processor)
     }
 
     @Bean
@@ -130,7 +130,7 @@ class AppConfig(
         tradeKafkaListener: TradeKafkaListener,
         accountantTradeListener: AccountantTradeListener
     ) {
-        tradeKafkaListener.addListener(accountantTradeListener)
+        // Trades are processed in the ordered events stream, together with cancel/reject events.
     }
 
     @Autowired

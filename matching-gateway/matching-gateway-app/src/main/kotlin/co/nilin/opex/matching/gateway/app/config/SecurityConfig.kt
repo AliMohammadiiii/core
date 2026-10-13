@@ -32,6 +32,8 @@ class SecurityConfig(private val webClient: WebClient) {
             .pathMatchers("/v2/api-docs").permitAll()
             .pathMatchers(HttpMethod.GET, "/pair-setting/**").permitAll()
             .pathMatchers(HttpMethod.PUT, "/pair-setting/**").hasAuthority("ROLE_admin")
+            .pathMatchers(HttpMethod.POST, "/v2/order").hasAuthority("PERM_order:write")
+            .pathMatchers(HttpMethod.DELETE, "/v2/order").hasAuthority("PERM_order:write")
             .anyExchange().authenticated()
             .and()
             .oauth2ResourceServer()

@@ -12,7 +12,9 @@ data class SimpleOrder(
     var filledQuantity: Long,
     var worse: SimpleOrder?,
     var better: SimpleOrder?,
-    var bucket: Bucket?
+    var bucket: Bucket?,
+    var canceled: Boolean = false,
+    var reservePriceBound: Boolean = false
 ) : Order {
 
     fun remainedQuantity() = quantity - filledQuantity
