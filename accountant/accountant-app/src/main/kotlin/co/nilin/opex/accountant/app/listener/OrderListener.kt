@@ -20,6 +20,16 @@ class OrderListener(private val orderManager: OrderManager, private val admissio
     override fun onEvent(event: OrderRequestEvent, partition: Int, offset: Long, timestamp: Long) {
         runBlocking {
             if (event is OrderSubmitRequestEvent) {
+            when (event.conditionalAction) {
+                "ACTIVATE" -> {
+                    admission.activateConditional(event)
+                    return@runBlocking
+                }
+                "CANCEL" -> {
+                    admission.cancelConditional(event)
+                    return@runBlocking
+                }
+            }
                 if (event.reservationConfirmed) return@runBlocking
                 if (event.requiresReservation) {
                     admission.accept(event)

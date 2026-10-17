@@ -17,7 +17,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.annotation.EnableScheduling
-import co.nilin.opex.matching.engine.core.inout.OrderSubmitRequestEvent
+import co.nilin.opex.matching.engine.core.inout.OrderRequestEvent
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization.StringSerializer
 import org.springframework.kafka.core.DefaultKafkaProducerFactory
@@ -34,13 +34,22 @@ class AppConfig(
 ) {
 
     @Bean("orderAdmissionKafkaTemplate")
-    fun orderAdmissionKafkaTemplate(@Value("\${spring.kafka.bootstrap-servers}") bootstrap: String): KafkaTemplate<String, OrderSubmitRequestEvent> =
+    fun orderAdmissionKafkaTemplate(@Value("\${spring.kafka.bootstrap-servers}") bootstrap: String): KafkaTemplate<String, OrderRequestEvent> =
         KafkaTemplate(DefaultKafkaProducerFactory(mapOf(
             ProducerConfig.BOOTSTRAP_SERVERS_CONFIG to bootstrap,
             ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG to StringSerializer::class.java,
             ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG to JsonSerializer::class.java,
             ProducerConfig.ACKS_CONFIG to "all",
-            JsonSerializer.TYPE_MAPPINGS to "order_request_submit:co.nilin.opex.matching.engine.core.inout.OrderSubmitRequestEvent")))
+            JsonSerializer.TYPE_MAPPINGS to "order_request_submit:co.nilin.opex.matching.engine.core.inout.OrderSubmitRequestEvent,order_request_cancel:co.nilin.opex.matching.engine.core.inout.OrderCancelRequestEvent")))
+
+    @Bean("orderAdmissionStatusKafkaTemplate")
+    fun orderAdmissionStatusKafkaTemplate(@Value("\${spring.kafka.bootstrap-servers}") bootstrap: String): KafkaTemplate<String, String> =
+        KafkaTemplate(DefaultKafkaProducerFactory(mapOf(
+            ProducerConfig.BOOTSTRAP_SERVERS_CONFIG to bootstrap,
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG to StringSerializer::class.java,
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG to StringSerializer::class.java,
+            ProducerConfig.ACKS_CONFIG to "all",
+        )))
 
     @Bean
     fun getFinancialActionJobManager(

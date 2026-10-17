@@ -57,7 +57,12 @@ class OrderIntentConfig {
             }
             when (event) {
                 is CreateOrderEvent -> update(event.uuid, event.ouid, "OPEN", event.orderId, event.remainedQuantity)
-                is CancelOrderEvent -> update(event.uuid, event.ouid, "CANCELED", event.orderId, event.remainedQuantity)
+                is CancelOrderEvent -> {
+                    val intent = store.find(event.uuid, null, event.ouid)
+                    if (intent?.type != "STOP_LIMIT") {
+                        update(event.uuid, event.ouid, "CANCELED", event.orderId, event.remainedQuantity)
+                    }
+                }
                 is RejectOrderEvent -> if (event.requestedOperation == RequestedOperation.PLACE_ORDER)
                     update(event.uuid, event.ouid, "REJECTED", event.orderId, null, event.reason?.name)
                 is TradeEvent -> {
@@ -68,6 +73,41 @@ class OrderIntentConfig {
                 }
             }
         } }
+        return KafkaMessageListenerContainer(factory, props).apply {
+            commonErrorHandler = DefaultErrorHandler(FixedBackOff(1000, 20))
+        }
+    }
+
+    @Bean
+    fun conditionalAdmissionStatusContainer(
+        @Value("\${spring.kafka.bootstrap-servers}") bootstrap: String,
+        store: OrderIntentStore,
+        mapper: ObjectMapper,
+    ): KafkaMessageListenerContainer<String, String> {
+        val factory = DefaultKafkaConsumerFactory<String, String>(mapOf(
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG to bootstrap,
+            ConsumerConfig.GROUP_ID_CONFIG to "opex-gateway-admission-status-v1",
+            ConsumerConfig.AUTO_OFFSET_RESET_CONFIG to "earliest",
+            ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG to false,
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG to StringDeserializer::class.java,
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG to StringDeserializer::class.java,
+        ))
+        val props = ContainerProperties("order_admission_status")
+        props.ackMode = ContainerProperties.AckMode.RECORD
+        props.messageListener = MessageListener<String, String> { record ->
+            runBlocking {
+                val statusEvent = runCatching { mapper.readTree(record.value()) }.getOrNull() ?: return@runBlocking
+                val owner = statusEvent.get("uuid")?.takeIf { it.isTextual }?.asText() ?: return@runBlocking
+                val ouid = statusEvent.get("ouid")?.takeIf { it.isTextual }?.asText() ?: return@runBlocking
+                val status = statusEvent.get("status")?.takeIf { it.isTextual }?.asText() ?: return@runBlocking
+                if (status !in setOf("WAITING_TRIGGER", "TRIGGERED", "CANCELED", "REJECTED")) return@runBlocking
+
+                // Derive the idempotency key from immutable identity and state, rather than
+                // trusting a delivery-specific Kafka offset or timestamp.
+                val idempotencyKey = "conditional-admission:$ouid:$status"
+                store.conditionalStatus(owner, ouid, idempotencyKey, record.value(), status)
+            }
+        }
         return KafkaMessageListenerContainer(factory, props).apply {
             commonErrorHandler = DefaultErrorHandler(FixedBackOff(1000, 20))
         }

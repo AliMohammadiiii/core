@@ -9,7 +9,8 @@ data class OrderIntent(
     val price: BigDecimal, val postOnly: Boolean, val leftFraction: BigDecimal,
     val payload: String, val status: String = "ACCEPTED_PENDING", val orderId: Long? = null,
     val filledQuantity: BigDecimal = BigDecimal.ZERO, val cancelRequested: Boolean = false,
-    val reason: String? = null, val createdAt: OffsetDateTime = OffsetDateTime.now()
+    val reason: String? = null, val createdAt: OffsetDateTime = OffsetDateTime.now(),
+    val stopPrice: BigDecimal? = null
 )
 
 class OrderIntentConflict : RuntimeException("clientOrderId was already used for different order parameters")

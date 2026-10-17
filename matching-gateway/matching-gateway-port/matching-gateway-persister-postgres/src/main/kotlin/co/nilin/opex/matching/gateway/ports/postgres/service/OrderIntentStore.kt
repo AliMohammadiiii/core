@@ -14,16 +14,20 @@ import java.time.OffsetDateTime
 @Component
 class OrderIntentStore(private val db: DatabaseClient, private val tx: TransactionalOperator) {
     suspend fun accept(candidate: OrderIntent): OrderIntent = tx.executeAndAwait {
-        db.sql("""INSERT INTO order_intent(ouid,owner,client_order_id,payload_hash,symbol,order_type,side,
-            quantity,price,post_only,left_fraction,payload) VALUES(:ouid,:owner,:cid,:hash,:symbol,:type,:side,
-            :quantity,:price,:post,:fraction,:payload) ON CONFLICT(owner,client_order_id) DO NOTHING""")
+        var insert = db.sql("""INSERT INTO order_intent(ouid,owner,client_order_id,payload_hash,symbol,order_type,side,
+            quantity,price,stop_price,post_only,left_fraction,payload) VALUES(:ouid,:owner,:cid,:hash,:symbol,:type,:side,
+            :quantity,:price,:stop,:post,:fraction,:payload) ON CONFLICT(owner,client_order_id) DO NOTHING""")
             .bind("ouid", candidate.ouid).bind("owner", candidate.owner).bind("cid", candidate.clientOrderId)
             .bind("hash", candidate.payloadHash).bind("symbol", candidate.symbol).bind("type", candidate.type)
             .bind("side", candidate.side).bind("quantity", candidate.quantity).bind("price", candidate.price)
             .bind("post", candidate.postOnly).bind("fraction", candidate.leftFraction).bind("payload", candidate.payload)
+        insert = if (candidate.stopPrice == null) insert.bindNull("stop", BigDecimal::class.java)
+            else insert.bind("stop", candidate.stopPrice)
+        insert
             .fetch().rowsUpdated().awaitSingle()
         val saved = find(candidate.owner, candidate.clientOrderId, null)!!
         if (saved.payloadHash != candidate.payloadHash) throw OrderIntentConflict()
+        if (saved.status in setOf("FILLED", "CANCELED", "REJECTED")) return@executeAndAwait saved
         enqueue(saved.ouid, "SUBMIT", saved.payload)
         saved
     }!!
@@ -39,6 +43,37 @@ class OrderIntentStore(private val db: DatabaseClient, private val tx: Transacti
     suspend fun owned(owner: String): List<OrderIntent> = db.sql("""SELECT * FROM order_intent
         WHERE owner=:owner AND status NOT IN ('FILLED','CANCELED','REJECTED') ORDER BY created_at,ouid""")
         .bind("owner", owner).map { row, _ -> intent(row) }.all().collectList().awaitSingle()
+
+    suspend fun metadata(owner: String): List<OrderIntent> = db.sql("""SELECT * FROM order_intent
+        WHERE owner=:owner ORDER BY created_at DESC,ouid DESC LIMIT 500""")
+        .bind("owner", owner).map { row, _ -> intent(row) }.all().collectList().awaitSingle()
+
+    suspend fun conditionalOrdersReady(): List<OrderIntent> = tx.executeAndAwait {
+        db.sql("""UPDATE order_intent i SET status='WAITING_TRIGGER'
+            FROM order_admission a JOIN fi_actions f ON f.uuid=a.reserve_uuid
+            WHERE i.ouid=a.ouid AND i.order_type='STOP_LIMIT'
+              AND i.status='ACCEPTED_PENDING' AND NOT i.cancel_requested
+              AND a.conditional AND NOT a.cancel_requested AND a.published_at IS NULL
+              AND f.status='PROCESSED'""").fetch().rowsUpdated().awaitSingle()
+        db.sql("""SELECT i.* FROM order_intent i
+            JOIN order_admission a ON a.ouid=i.ouid
+            JOIN fi_actions f ON f.uuid=a.reserve_uuid
+            WHERE i.order_type='STOP_LIMIT' AND i.status='WAITING_TRIGGER'
+              AND NOT i.cancel_requested AND a.conditional AND NOT a.cancel_requested
+              AND a.published_at IS NULL AND f.status='PROCESSED'
+            ORDER BY i.created_at,i.ouid LIMIT 500""")
+            .map { row, _ -> intent(row) }.all().collectList().awaitSingle()
+    }!!
+
+    suspend fun activateConditional(owner: String, ouid: String, payload: String): Boolean = tx.executeAndAwait {
+        val updated = db.sql("""UPDATE order_intent SET status='TRIGGERED'
+            WHERE owner=:owner AND ouid=:ouid AND order_type='STOP_LIMIT'
+              AND status='WAITING_TRIGGER' AND NOT cancel_requested""")
+            .bind("owner", owner).bind("ouid", ouid).fetch().rowsUpdated().awaitSingle()
+        if (updated == 0) return@executeAndAwait false
+        enqueue(ouid, "ACTIVATE", payload)
+        true
+    }!!
 
     suspend fun cancel(owner: String, clientOrderId: String?, ouid: String?, payload: String): OrderIntent? = tx.executeAndAwait {
         val found = find(owner, clientOrderId, ouid) ?: return@executeAndAwait null
@@ -56,7 +91,11 @@ class OrderIntentStore(private val db: DatabaseClient, private val tx: Transacti
 
     // Kafka delivery is at least once. Locks and the receipt transaction prevent an unrecorded publication.
     suspend fun publishNext(publish: suspend (String, String) -> Unit): Boolean = tx.executeAndAwait {
-        val next = db.sql("SELECT id,kind,payload FROM order_intent_outbox WHERE published_at IS NULL ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1")
+        val next = db.sql("""SELECT o.id,o.kind,o.payload FROM order_intent_outbox o
+            WHERE o.published_at IS NULL
+              AND NOT EXISTS (SELECT 1 FROM order_intent_outbox earlier
+                WHERE earlier.published_at IS NULL AND earlier.id<o.id)
+            ORDER BY o.id FOR UPDATE SKIP LOCKED LIMIT 1""")
             .map { row, _ -> Triple(row.get("id", java.lang.Long::class.java)!!.toLong(),
                 row.get("kind", String::class.java)!!, row.get("payload", String::class.java)!!) }
             .one().awaitSingleOrNull() ?: return@executeAndAwait false
@@ -65,6 +104,14 @@ class OrderIntentStore(private val db: DatabaseClient, private val tx: Transacti
             .fetch().rowsUpdated().awaitSingle()
         true
     }!!
+
+    suspend fun conditionalStatus(owner: String, ouid: String, key: String, payload: String, status: String): Boolean {
+        if (status !in setOf("WAITING_TRIGGER", "TRIGGERED", "CANCELED", "REJECTED")) return false
+        val intent = find(owner, null, ouid) ?: return false
+        if (intent.type != "STOP_LIMIT") return false
+        outcome(owner, ouid, key, payload, status, null, null, null)
+        return true
+    }
 
     suspend fun outcome(owner: String, ouid: String, key: String, payload: String, status: String,
                         orderId: Long?, remaining: Long?, reason: String?) = tx.executeAndAwait {
@@ -82,6 +129,8 @@ class OrderIntentStore(private val db: DatabaseClient, private val tx: Transacti
         var update = db.sql("""UPDATE order_intent SET order_id=coalesce(order_id,:id),
             filled_quantity=greatest(filled_quantity,:filled),
             status=CASE WHEN status IN ('FILLED','CANCELED','REJECTED') THEN status
+                WHEN :status IN ('WAITING_TRIGGER','TRIGGERED') AND status IN ('OPEN','PARTIALLY_FILLED') THEN status
+                WHEN :status='WAITING_TRIGGER' AND status='TRIGGERED' THEN status
                 WHEN :status='OPEN' AND filled_quantity>0 THEN status ELSE :status END,
             reason=coalesce(:reason,reason) WHERE ouid=:ouid AND owner=:owner""")
             .bind("filled", filled).bind("status", status).bind("ouid", ouid).bind("owner", owner)
@@ -109,5 +158,5 @@ class OrderIntentStore(private val db: DatabaseClient, private val tx: Transacti
         row.get("status", String::class.java)!!, row.get("order_id", java.lang.Long::class.java)?.toLong(),
         row.get("filled_quantity", BigDecimal::class.java)!!,
         row.get("cancel_requested", java.lang.Boolean::class.java)!!.booleanValue(), row.get("reason", String::class.java),
-        row.get("created_at", OffsetDateTime::class.java)!!)
+        row.get("created_at", OffsetDateTime::class.java)!!, row.get("stop_price", BigDecimal::class.java))
 }

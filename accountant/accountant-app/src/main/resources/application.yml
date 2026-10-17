@@ -104,6 +104,14 @@ app:
         count: 2
         delay-millis: 250
       timeout-seconds: 10
+  market:
+    url: ${MARKET_BASE_URL:lb://opex-market/}
+  order-admission:
+    trigger-poll-ms: ${ORDER_TRIGGER_POLL_MS:1000}
+    max-trade-age-ms: ${ORDER_TRIGGER_MAX_TRADE_AGE_MS:10000}
+    market-timeout-ms: ${ORDER_TRIGGER_MARKET_TIMEOUT_MS:3000}
+    readiness-max-age-ms: ${ORDER_TRIGGER_READINESS_MAX_AGE_MS:5000}
+    readiness-symbols: ${ORDER_TRIGGER_READINESS_SYMBOLS:BTC_USDT}
   fi-action:
     retry:
       count: 10

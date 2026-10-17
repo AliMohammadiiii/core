@@ -36,6 +36,7 @@ class UserTradeHistoryPostgresTest {
     private val factory = ConnectionFactories.get(base.mutate().option(Option.valueOf("schema"), schema).build())
     private val db = DatabaseClient.create(factory)
     private lateinit var handler: UserQueryHandlerImpl
+    private lateinit var tradeRepository: TradeRepository
     private val mapper = jacksonObjectMapper().registerModule(JavaTimeModule())
     private val date = LocalDateTime.parse("2026-10-13T18:56:24.212")
 
@@ -45,9 +46,22 @@ class UserTradeHistoryPostgresTest {
         val ddl = ClassPathResource("schema.sql").inputStream.bufferedReader().use { it.readText() }
         db.sql(ddl).then().awaitSingleOrNull()
         val repositories = R2dbcRepositoryFactory(R2dbcEntityTemplate(factory))
+        tradeRepository = repositories.getRepository(TradeRepository::class.java)
         handler = UserQueryHandlerImpl(repositories.getRepository(OrderRepository::class.java),
             repositories.getRepository(TradeRepository::class.java),
             repositories.getRepository(OrderStatusRepository::class.java))
+    }
+
+    @Test
+    fun publicPartialFillUsesExecutionValueRatherThanWholeOrderReservation(): Unit = runBlocking {
+        order("public-maker", "buyer", 606, "BID", "62400", "12.5")
+        order("public-taker", "seller", 707, "ASK", "62000", "0.1")
+        fill(904, 34, "public-maker", "buyer", "public-taker", "seller", "62400", "0.1", "62400", "62000",
+            "0.0001", "BTC", "6.24", "USDT", date)
+        val publicTrade = tradeRepository.findRecentMarketTrades("BTC_USDT", 10).collectList().awaitSingle().single()
+        decimal("6240", publicTrade.quoteQuantity)
+        decimal("0.1", publicTrade.quantity)
+        assertTrue(publicTrade.isMakerBuyer)
     }
 
     @AfterEach

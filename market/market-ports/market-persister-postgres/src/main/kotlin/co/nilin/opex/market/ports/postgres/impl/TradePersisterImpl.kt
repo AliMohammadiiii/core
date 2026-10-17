@@ -82,10 +82,7 @@ class TradePersisterImpl(
                     tradeEntity.tradeId,
                     tradeEntity.matchedPrice,
                     tradeEntity.matchedQuantity,
-                    if (isMakerBuyer)
-                        trade.makerQuoteQuantity
-                    else
-                        trade.takerQuoteQuantity,
+                    tradeEntity.matchedPrice.multiply(tradeEntity.matchedQuantity),
                     Date.from(tradeEntity.createDate.atZone(ZoneId.systemDefault()).toInstant()),
                     true,
                     isMakerBuyer

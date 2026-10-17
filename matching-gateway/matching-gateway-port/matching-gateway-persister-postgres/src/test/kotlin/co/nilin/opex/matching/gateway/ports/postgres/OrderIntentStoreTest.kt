@@ -28,6 +28,9 @@ class OrderIntentStoreTest {
 
     @BeforeEach
     fun clean() = runBlocking {
+        val database = db.sql("SELECT current_database() AS name")
+            .map { row, _ -> row.get("name", String::class.java)!! }.one().awaitSingle()
+        check(database == "opex_test") { "Refusing destructive fixture outside disposable opex_test database" }
         db.sql("DELETE FROM order_intent_outbox").fetch().rowsUpdated().awaitSingle()
         db.sql("DELETE FROM order_intent_event").fetch().rowsUpdated().awaitSingle()
         db.sql("DELETE FROM order_intent").fetch().rowsUpdated().awaitSingle()
@@ -61,6 +64,47 @@ class OrderIntentStoreTest {
         assertNull(store().cancel("attacker", null, first.ouid, "{}"))
     }
 
+@Test
+fun sameHashReplayOfTerminalTombstoneDoesNotRecreateSubmitOutbox() = runBlocking {
+    val request = candidate("terminal-replay")
+    val tombstone = store().accept(request)
+    db.sql("DELETE FROM order_intent_outbox WHERE ouid=:ouid")
+        .bind("ouid", tombstone.ouid).fetch().rowsUpdated().awaitSingle()
+    db.sql("UPDATE order_intent SET status='CANCELED',cancel_requested=true WHERE ouid=:ouid")
+        .bind("ouid", tombstone.ouid).fetch().rowsUpdated().awaitSingle()
+
+    val replay = store().accept(request.copy(ouid = UUID.randomUUID().toString()))
+    val submitRows = db.sql("SELECT count(*) AS n FROM order_intent_outbox WHERE ouid=:ouid AND kind='SUBMIT'")
+        .bind("ouid", tombstone.ouid)
+        .map { row, _ -> row.get("n", java.lang.Long::class.java)!!.toLong() }
+        .one().awaitSingle()
+
+    assertEquals(tombstone.ouid, replay.ouid)
+    assertEquals("CANCELED", replay.status)
+    assertEquals(0L, submitRows)
+}
+
+    @Test
+    fun metadataIsOwnerScopedIncludesTerminalConditionalTermsAndIsLimitedTo500() = runBlocking {
+        repeat(500) { index -> store().accept(candidate("metadata-$index")) }
+        val terminalStop = store().accept(candidate("terminal-stop").copy(
+            type = "STOP_LIMIT",
+            stopPrice = BigDecimal("10.2500"),
+        ))
+        db.sql("UPDATE order_intent SET status='FILLED', created_at=now() + INTERVAL '1 day' WHERE ouid=:ouid")
+            .bind("ouid", terminalStop.ouid).fetch().rowsUpdated().awaitSingle()
+        store().accept(candidate("other-owner", owner = "other"))
+
+        val metadata = store().metadata("owner")
+
+        assertEquals(500, metadata.size)
+        assertEquals("terminal-stop", metadata.first().clientOrderId)
+        assertEquals("FILLED", metadata.first().status)
+        assertEquals("STOP_LIMIT", metadata.first().type)
+        assertEquals("10.2500", metadata.first().stopPrice?.toPlainString())
+        assertFalse(metadata.any { it.clientOrderId == "other-owner" })
+    }
+
     @Test
     fun cancelReceiptRemainsPendingAndIsIdempotent() = runBlocking {
         store().accept(candidate("cancel"))
@@ -91,6 +135,55 @@ class OrderIntentStoreTest {
         assertEquals("PARTIALLY_FILLED", receipt.status)
         assertEquals(2, store().events("owner", 0).size)
         assertTrue(store().events("attacker", 0).isEmpty())
+    }
+
+    @Test
+fun lateConditionalAdmissionAcknowledgementsPreserveMatcherEvidence() = runBlocking {
+    for (evidence in listOf("OPEN", "PARTIALLY_FILLED", "FILLED", "CANCELED", "REJECTED")) {
+        val accepted = store().accept(candidate("late-admission-$evidence").copy(
+            type = "STOP_LIMIT",
+            stopPrice = BigDecimal("101"),
+        ))
+        val remaining = if (evidence == "FILLED") 0L else 500L
+        store().outcome("owner", accepted.ouid, "engine-$evidence", "{}", evidence, 71, remaining, null)
+
+        store().outcome("owner", accepted.ouid, "admission-waiting-$evidence", "{}", "WAITING_TRIGGER", null, null, null)
+        store().outcome("owner", accepted.ouid, "admission-triggered-$evidence", "{}", "TRIGGERED", null, null, null)
+
+        val current = store().find("owner", null, accepted.ouid)!!
+        assertEquals(evidence, current.status)
+        if (evidence == "PARTIALLY_FILLED" || evidence == "FILLED") {
+            assertTrue(current.filledQuantity > BigDecimal.ZERO)
+        }
+    }
+}
+
+@Test
+fun lateWaitingAdmissionAcknowledgementCannotRegressTriggered() = runBlocking {
+    val accepted = store().accept(candidate("waiting-after-trigger").copy(
+        type = "STOP_LIMIT",
+        stopPrice = BigDecimal("101"),
+    ))
+    store().outcome("owner", accepted.ouid, "admission-triggered", "{}", "TRIGGERED", null, null, null)
+    store().outcome("owner", accepted.ouid, "admission-waiting", "{}", "WAITING_TRIGGER", null, null, null)
+
+    assertEquals("TRIGGERED", store().find("owner", null, accepted.ouid)!!.status)
+}
+
+@Test
+fun conditionalAdmissionStatusIsOwnerScopedAndDeduplicated() = runBlocking {
+    val accepted = store().accept(candidate("scoped-admission-status").copy(
+        type = "STOP_LIMIT",
+        stopPrice = BigDecimal("101"),
+    ))
+    assertFalse(store().conditionalStatus("attacker", accepted.ouid, "admission-status", "{}", "TRIGGERED"))
+    assertEquals("ACCEPTED_PENDING", store().find("owner", null, accepted.ouid)!!.status)
+
+    store().conditionalStatus("owner", accepted.ouid, "admission-status", "{}", "TRIGGERED")
+    store().conditionalStatus("owner", accepted.ouid, "admission-status", "{}", "WAITING_TRIGGER")
+
+    assertEquals("TRIGGERED", store().find("owner", null, accepted.ouid)!!.status)
+    assertTrue(store().events("attacker", 0).isEmpty())
     }
 
     @Test

@@ -15,7 +15,7 @@ import org.testcontainers.containers.PostgreSQLContainer
 import javax.sql.DataSource
 
 @TestConfiguration
-@Profile("test")
+@Profile("test & !external-postgres")
 @EnableR2dbcRepositories(basePackages = ["co.nilin.opex"])
 class PostgresEnabledTest(@Value("\${testcontainers.db.name}") private val name: String,
                           @Value("\${testcontainers.db.username}") private val username: String,

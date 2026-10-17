@@ -15,6 +15,10 @@ import java.net.URI
 @Component
 class OrderIntentProxyImpl(@Qualifier("generalWebClient") private val client: WebClient,
     @Value("\${app.matching-gateway.url}") private val baseUrl: String) : OrderIntentProxy {
+    override suspend fun abandon(request: OrderIntentRequest, token: String) = client.post()
+        .uri(URI.create("$baseUrl/v2/order/abandon")).headers { it.setBearerAuth(token) }.bodyValue(request)
+        .retrieve().onStatus({ it.isError }) { it.createException().map { error -> ResponseStatusException(error.statusCode, error.responseBodyAsString, error) } }
+        .bodyToMono<OrderIntentReceipt>().awaitSingle()
     override suspend fun submit(request: OrderIntentRequest, token: String) = client.post()
         .uri(URI.create("$baseUrl/v2/order")).headers { it.setBearerAuth(token) }.bodyValue(request)
         .retrieve().onStatus({ it.isError }) { it.createException().map { error -> ResponseStatusException(error.statusCode, error.responseBodyAsString, error) } }
@@ -36,4 +40,14 @@ class OrderIntentProxyImpl(@Qualifier("generalWebClient") private val client: We
         .uri(URI.create("$baseUrl/v2/order/events?cursor=$cursor")).headers { it.setBearerAuth(token) }.retrieve()
         .onStatus({ it.isError }) { it.createException().map { error -> ResponseStatusException(error.statusCode, error.responseBodyAsString, error) } }
         .bodyToMono<List<OrderIntentEvent>>().awaitSingle()
+
+    override suspend fun capabilities(token: String) = client.get()
+        .uri(URI.create("$baseUrl/v2/order/capabilities")).headers { it.setBearerAuth(token) }.retrieve()
+        .onStatus({ it.isError }) { it.createException().map { error -> ResponseStatusException(error.statusCode, error.responseBodyAsString, error) } }
+        .bodyToMono<OrderIntentCapabilities>().awaitSingle()
+
+    override suspend fun metadata(token: String) = client.get()
+        .uri(URI.create("$baseUrl/v2/order/metadata")).headers { it.setBearerAuth(token) }.retrieve()
+        .onStatus({ it.isError }) { it.createException().map { error -> ResponseStatusException(error.statusCode, error.responseBodyAsString, error) } }
+        .bodyToMono<List<OrderIntentMetadata>>().awaitSingle()
 }

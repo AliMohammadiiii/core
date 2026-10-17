@@ -18,7 +18,10 @@ class OrderIntentOutbox(private val store: OrderIntentStore, private val submitt
             val sent = store.publishNext { kind, payload ->
                 val event = when (kind) {
                     "SUBMIT" -> mapper.readValue(payload, OrderSubmitRequestEvent::class.java)
-                    "CANCEL" -> mapper.readValue(payload, OrderCancelRequestEvent::class.java)
+                    "ACTIVATE" -> mapper.readValue(payload, OrderSubmitRequestEvent::class.java)
+                    "CANCEL" -> if (mapper.readTree(payload).hasNonNull("conditionalAction")) {
+                        mapper.readValue(payload, OrderSubmitRequestEvent::class.java)
+                    } else mapper.readValue(payload, OrderCancelRequestEvent::class.java)
                     else -> error("Invalid order outbox type")
                 }
                 withTimeout(15000) { submitter.submit(event) }

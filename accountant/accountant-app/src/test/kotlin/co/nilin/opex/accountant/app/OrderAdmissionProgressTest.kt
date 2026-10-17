@@ -3,6 +3,7 @@ package co.nilin.opex.accountant.app
 import co.nilin.opex.accountant.app.service.OrderAdmissionService
 import co.nilin.opex.accountant.core.api.OrderManager
 import co.nilin.opex.matching.engine.core.eventh.events.CoreEvent
+import co.nilin.opex.matching.engine.core.inout.OrderRequestEvent
 import co.nilin.opex.matching.engine.core.inout.OrderSubmitRequestEvent
 import co.nilin.opex.matching.engine.core.model.*
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -29,21 +30,31 @@ class OrderAdmissionProgressTest {
     private val factory = ConnectionFactories.get(System.getenv("OPEX_TEST_POSTGRES") ?: "r2dbc:postgresql://opex_test:opex_test@localhost:18033/opex_test")
     private val db = DatabaseClient.create(factory)
     private val mapper = jacksonObjectMapper()
-    private val reserved = mutableListOf<MockProducer<String, OrderSubmitRequestEvent>>()
+    private val reserved = mutableListOf<MockProducer<String, OrderRequestEvent>>()
     private val rejected = mutableListOf<MockProducer<String?, CoreEvent>>()
-    private val orderFactory = object : ProducerFactory<String, OrderSubmitRequestEvent> {
-        override fun createProducer(): Producer<String, OrderSubmitRequestEvent> =
-            MockProducer(true, StringSerializer(), JsonSerializer<OrderSubmitRequestEvent>()).also { reserved.add(it) }
+    private val orderFactory = object : ProducerFactory<String, OrderRequestEvent> {
+        override fun createProducer(): Producer<String, OrderRequestEvent> =
+            MockProducer(true, StringSerializer(), JsonSerializer<OrderRequestEvent>()).also { reserved.add(it) }
     }
     private val eventFactory = object : ProducerFactory<String?, CoreEvent> {
         override fun createProducer(): Producer<String?, CoreEvent> =
             MockProducer(true, StringSerializer(), JsonSerializer<CoreEvent>()).also { rejected.add(it) }
     }
-    private fun service() = OrderAdmissionService(db, R2dbcTransactionManager(factory), mockk<OrderManager>(),
-        mapper, KafkaTemplate(eventFactory), KafkaTemplate(orderFactory))
+    private fun service() = OrderAdmissionService(
+        db,
+        R2dbcTransactionManager(factory),
+        mockk<OrderManager>(),
+        mapper,
+        KafkaTemplate(eventFactory),
+        KafkaTemplate(orderFactory),
+        mockk<KafkaTemplate<String, String>>(relaxed = true),
+    )
 
     @BeforeEach
     fun clean(): Unit = runBlocking {
+        val database = db.sql("SELECT current_database() AS name")
+            .map { row, _ -> row.get("name", String::class.java)!! }.one().awaitSingle()
+        check(database == "opex_test") { "Refusing destructive fixture outside disposable opex_test database" }
         db.sql("DELETE FROM order_admission").fetch().rowsUpdated().awaitSingle()
         db.sql("DELETE FROM fi_action_error").fetch().rowsUpdated().awaitSingle()
         db.sql("DELETE FROM fi_actions").fetch().rowsUpdated().awaitSingle()

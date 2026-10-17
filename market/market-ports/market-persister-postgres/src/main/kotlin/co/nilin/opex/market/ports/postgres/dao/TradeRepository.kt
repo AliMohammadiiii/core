@@ -48,14 +48,7 @@ interface TradeRepository : ReactiveCrudRepository<TradeModel, Long> {
         t.matched_price AS price,
         t.matched_quantity AS quantity,
 
-        COALESCE(
-            CASE
-                WHEN mo.side = 'BID'
-                THEN mo.quote_quantity
-                ELSE to2.quote_quantity
-            END,
-            0
-        ) AS quote_quantity,
+        t.matched_price * t.matched_quantity AS quote_quantity,
 
         t.create_date AS create_date,
 

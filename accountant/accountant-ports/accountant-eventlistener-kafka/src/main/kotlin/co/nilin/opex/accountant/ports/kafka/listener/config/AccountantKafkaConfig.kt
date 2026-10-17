@@ -105,7 +105,7 @@ class AccountantKafkaConfig {
         @Qualifier("accountantEventKafkaTemplate") template: KafkaTemplate<String?, CoreEvent>,
         @Qualifier("accountantConsumerFactory") consumerFactory: ConsumerFactory<String, CoreEvent>
     ): ConcurrentMessageListenerContainer<String, CoreEvent> {
-        val containerProps = ContainerProperties(Pattern.compile("orders_.*"))
+        val containerProps = ContainerProperties(Pattern.compile("orders_.*|order_admission_commands"))
         containerProps.messageListener = orderListener
         containerProps.ackMode = ContainerProperties.AckMode.RECORD
         val container = ConcurrentMessageListenerContainer(consumerFactory, containerProps)

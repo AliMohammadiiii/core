@@ -19,6 +19,9 @@ class OrderIntentController(private val proxy: OrderIntentProxy) {
     @PostMapping
     suspend fun submit(@RequestBody request: OrderIntentRequest, @CurrentSecurityContext context: SecurityContext) =
         proxy.submit(request, context.jwtAuthentication().tokenValue())
+    @PostMapping("/abandon")
+    suspend fun abandon(@RequestBody request: OrderIntentRequest, @CurrentSecurityContext context: SecurityContext) =
+        proxy.abandon(request, context.jwtAuthentication().tokenValue())
     @GetMapping
     suspend fun get(@RequestParam(required=false) clientOrderId: String?, @RequestParam(required=false) ouid: String?,
         @CurrentSecurityContext context: SecurityContext) = proxy.lookup(clientOrderId, ouid, context.jwtAuthentication().tokenValue())
@@ -30,4 +33,12 @@ class OrderIntentController(private val proxy: OrderIntentProxy) {
     @GetMapping("/events")
     suspend fun events(@RequestParam(defaultValue="0") cursor: Long, @CurrentSecurityContext context: SecurityContext) =
         proxy.events(cursor, context.jwtAuthentication().tokenValue())
+
+ @GetMapping("/capabilities")
+ suspend fun capabilities(@CurrentSecurityContext context: SecurityContext) =
+ proxy.capabilities(context.jwtAuthentication().tokenValue())
+
+ @GetMapping("/metadata")
+ suspend fun metadata(@CurrentSecurityContext context: SecurityContext) =
+ proxy.metadata(context.jwtAuthentication().tokenValue())
 }

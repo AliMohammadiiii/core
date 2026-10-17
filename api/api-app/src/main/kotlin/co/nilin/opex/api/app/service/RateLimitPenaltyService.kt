@@ -33,6 +33,12 @@ class RateLimitPenaltyService(private val config: RateLimitConfigService, privat
         val now = System.currentTimeMillis()
         val group = config.getGroup(groupId) ?: return BlockResult(false)
         val penalties = config.getPenalties(groupId).sortedBy { it.blockStep }
+        // A group may intentionally have no escalating penalties. The request
+        // limit still applies; absence of penalty rows must never turn it into
+        // a server error or admit the over-limit request.
+        if (penalties.isEmpty()) {
+            return BlockResult(blocked = true, retryAfterSeconds = group.requestWindowSeconds.coerceAtLeast(1))
+        }
 
         val current = getPenaltyState(identity, apiPath, apiMethod)
         val nextViolationCount = (current?.violationCount ?: 0) + 1

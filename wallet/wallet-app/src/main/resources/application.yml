@@ -131,6 +131,16 @@ app:
     client-secret: none
   system:
     uuid: 1
+  wallet:
+    sandbox:
+      enabled: ${APP_WALLET_SANDBOX_ENABLED:false}
+      funding-owner-uuid: ${APP_WALLET_SANDBOX_FUNDING_OWNER_UUID:}
+    custody:
+      ledger:
+        enabled: ${APP_WALLET_CUSTODY_LEDGER_ENABLED:false}
+        key: ${APP_WALLET_CUSTODY_LEDGER_KEY:}
+        treasury-owner-uuid: ${APP_WALLET_CUSTODY_TREASURY_OWNER_UUID:}
+        bootstrap-enabled: ${APP_WALLET_CUSTODY_LEDGER_BOOTSTRAP_ENABLED:false}
   backup:
     storage:
       enabled: ${BACKUP_ENABLED_STORAGE:false}

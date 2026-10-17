@@ -4,6 +4,7 @@ import co.nilin.opex.matching.engine.core.model.MatchConstraint
 import co.nilin.opex.matching.engine.core.model.OrderDirection
 import co.nilin.opex.matching.engine.core.model.OrderType
 import co.nilin.opex.matching.engine.core.model.Pair
+import java.math.BigDecimal
 import java.util.*
 
 class OrderSubmitRequestEvent(
@@ -20,5 +21,7 @@ class OrderSubmitRequestEvent(
     val postOnly: Boolean = false,
     val requiresReservation: Boolean = false,
     val reservationConfirmed: Boolean = false,
+    var conditionalAction: String? = null,
     ouid: String = UUID.randomUUID().toString(),
+    val stopPrice: BigDecimal? = null,
 ) : OrderRequestEvent(ouid, uuid, pair)

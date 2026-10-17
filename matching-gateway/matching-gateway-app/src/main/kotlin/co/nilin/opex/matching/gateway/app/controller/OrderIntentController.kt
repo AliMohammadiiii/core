@@ -1,6 +1,7 @@
 package co.nilin.opex.matching.gateway.app.controller
 
 import co.nilin.opex.matching.gateway.app.inout.OrderIntentRequest
+import co.nilin.opex.matching.gateway.app.service.OrderIntentReadService
 import co.nilin.opex.matching.gateway.app.service.OrderIntentService
 import co.nilin.opex.matching.gateway.ports.postgres.dto.*
 import co.nilin.opex.matching.gateway.ports.postgres.service.OrderIntentStore
@@ -12,7 +13,11 @@ import java.security.Principal
 
 @RestController
 @RequestMapping("/v2/order")
-class OrderIntentController(private val service: OrderIntentService, private val store: OrderIntentStore) {
+class OrderIntentController(
+    private val service: OrderIntentService,
+    private val store: OrderIntentStore,
+    private val readService: OrderIntentReadService,
+) {
     @ExceptionHandler(ResponseStatusException::class)
     fun expectedFailure(error: ResponseStatusException): ResponseEntity<Map<String, String>> =
         ResponseEntity.status(error.status).body(mapOf("error" to (error.reason ?: "Order request failed")))
@@ -22,6 +27,13 @@ class OrderIntentController(private val service: OrderIntentService, private val
         receipt(try { service.submit(principal.name, request) } catch (e: OrderIntentConflict) {
             throw ResponseStatusException(HttpStatus.CONFLICT, e.message, e)
         })
+
+    @PostMapping("/abandon")
+    suspend fun abandon(principal: Principal, @RequestBody request: OrderIntentRequest): Map<String, Any?> =
+        receipt(try { service.abandon(principal.name, request) } catch (e: OrderIntentConflict) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, e.message, e)
+        })
+
     @GetMapping
     suspend fun get(principal: Principal, @RequestParam(required = false) clientOrderId: String?,
         @RequestParam(required = false) ouid: String?) = receipt(service.get(principal.name, clientOrderId, ouid))
@@ -33,6 +45,12 @@ class OrderIntentController(private val service: OrderIntentService, private val
     @GetMapping("/events")
     suspend fun events(principal: Principal, @RequestParam(defaultValue = "0") cursor: Long) =
         store.events(principal.name, cursor)
+
+    @GetMapping("/capabilities")
+    suspend fun capabilities() = readService.capabilities()
+
+    @GetMapping("/metadata")
+    suspend fun metadata(principal: Principal) = readService.metadata(principal.name)
 
     private fun receipt(i: OrderIntent): Map<String, Any?> {
         val terminal = i.status in listOf("FILLED", "CANCELED", "REJECTED")

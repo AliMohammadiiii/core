@@ -45,6 +45,22 @@ class KafkaTopicConfig {
                     .build()
             })
 
+            registerBean("topic_orderAdmissionCommands", NewTopic::class.java, Supplier {
+                TopicBuilder.name("order_admission_commands")
+                    .partitions(partitionCount)
+                    .replicas(replicaCount)
+                    .config(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minSyncReplicaCount)
+                    .build()
+            })
+
+            registerBean("topic_orderAdmissionStatus", NewTopic::class.java, Supplier {
+                TopicBuilder.name("order_admission_status")
+                    .partitions(partitionCount)
+                    .replicas(replicaCount)
+                    .config(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minSyncReplicaCount)
+                    .build()
+            })
+
             /*registerBean("topic_fiAction", NewTopic::class.java, Supplier {
                 TopicBuilder.name("fiAction")
                     .partitions(partitionCount)

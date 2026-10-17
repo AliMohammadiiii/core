@@ -76,6 +76,12 @@
             <artifactId>accountant-eventlistener-kafka</artifactId>
         </dependency>
         <dependency>
+            <groupId>co.nilin.opex.matching.engine.ports.kafka.listener</groupId>
+            <artifactId>matching-engine-eventlistener-kafka</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>co.nilin.opex.accountant.ports.kafka.submitter</groupId>
             <artifactId>accountant-submitter-kafka</artifactId>
         </dependency>

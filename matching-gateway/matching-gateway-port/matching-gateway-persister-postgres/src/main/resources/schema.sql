@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS order_intent (
     side VARCHAR(8) NOT NULL,
     quantity DECIMAL NOT NULL CHECK (quantity > 0),
     price DECIMAL NOT NULL CHECK (price >= 0),
+    stop_price DECIMAL CHECK (stop_price IS NULL OR stop_price > 0),
     post_only BOOLEAN NOT NULL DEFAULT FALSE,
     left_fraction DECIMAL NOT NULL,
     payload TEXT NOT NULL,
@@ -68,6 +69,7 @@ CREATE TABLE IF NOT EXISTS order_intent (
     UNIQUE (owner, client_order_id),
     CHECK (filled_quantity >= 0 AND filled_quantity <= quantity)
 );
+ALTER TABLE order_intent ADD COLUMN IF NOT EXISTS stop_price DECIMAL;
 CREATE TABLE IF NOT EXISTS order_intent_outbox (
     id BIGSERIAL PRIMARY KEY,
     ouid VARCHAR(72) NOT NULL REFERENCES order_intent(ouid),

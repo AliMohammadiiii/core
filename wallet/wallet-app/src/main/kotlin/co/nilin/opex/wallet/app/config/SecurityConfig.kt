@@ -31,6 +31,8 @@ class SecurityConfig(private val webClient: WebClient) {
     fun springSecurityFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain? {
         http.csrf().disable()
             .authorizeExchange()
+            .pathMatchers("/v1/custody/ledger/**").permitAll()
+            .pathMatchers("/v1/sandbox/**").authenticated()
             .pathMatchers("/v1/deposit/webhook").permitAll()
             .pathMatchers("/balanceOf/**").authenticated()
             .pathMatchers("/owner/**").authenticated()
@@ -95,6 +97,7 @@ class SecurityConfig(private val webClient: WebClient) {
 
         http.csrf().disable()
             .authorizeExchange()
+            .pathMatchers("/v1/sandbox/**").authenticated()
 //                .pathMatchers("/transaction/**").hasAuthority("SCOPE_trust")
             .pathMatchers("/v1/deposit/webhook").permitAll()
             .pathMatchers("/admin/**").hasRoleAndLevel("Admin")

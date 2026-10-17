@@ -40,6 +40,37 @@ CREATE TABLE IF NOT EXISTS accountant_event_inbox (
 );
 
 ALTER TABLE order_admission ADD COLUMN IF NOT EXISTS reconciliation_required BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE order_admission ADD COLUMN IF NOT EXISTS conditional BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_order_admission_conditional_ouid
+    ON order_admission (ouid) WHERE conditional;
+ALTER TABLE order_admission ADD COLUMN IF NOT EXISTS activation_requested BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE order_admission ADD COLUMN IF NOT EXISTS cancel_requested BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE order_admission ADD COLUMN IF NOT EXISTS cancel_sent_at TIMESTAMPTZ;
+ALTER TABLE order_admission ADD COLUMN IF NOT EXISTS publication_started_at TIMESTAMPTZ;
+ALTER TABLE order_admission ADD COLUMN IF NOT EXISTS dispatch_attempted_at TIMESTAMPTZ;
+UPDATE order_admission SET publication_started_at = published_at
+WHERE published_at IS NOT NULL AND publication_started_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS order_admission_commands (
+    ouid VARCHAR(72) PRIMARY KEY,
+    uuid VARCHAR(72) NOT NULL,
+    action VARCHAR(16) NOT NULL CHECK (action IN ('ACTIVATE', 'CANCEL')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS order_admission_status_outbox (
+    id BIGSERIAL PRIMARY KEY,
+    ouid VARCHAR(72) NOT NULL,
+    uuid VARCHAR(72) NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('WAITING_TRIGGER', 'TRIGGERED', 'CANCELED', 'REJECTED')),
+    dispatch_attempted_at TIMESTAMPTZ,
+    published_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (ouid, status)
+);
+
+CREATE INDEX IF NOT EXISTS order_admission_status_outbox_pending
+    ON order_admission_status_outbox(id) WHERE published_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS fi_actions
 (
